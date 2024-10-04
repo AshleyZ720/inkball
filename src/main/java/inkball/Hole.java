@@ -22,4 +22,9 @@ public class Hole implements Drawable {
     public void draw(PApplet app) {
         app.image(image, x * App.CELLSIZE, y * App.CELLSIZE);
     }
+
+    @Override
+    public void update() {
+
+    }
 }

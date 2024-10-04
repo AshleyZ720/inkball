@@ -31,7 +31,7 @@ public class App extends PApplet {
     public static final int FPS = 30;
 
     public String configPath;
-    private Tile[][] grid;
+    private static Tile[][] grid;
     private List<Drawable> drawables;
     private PImage wall0, wall1, wall2, wall3, wall4;
     private PImage ball0, ball1, ball2, ball3, ball4;
@@ -42,8 +42,8 @@ public class App extends PApplet {
     private PImage tileBaseImage;
 
     public static Random random = new Random();
-	
-	// Feel free to add any additional methods or attributes you want. Please put classes in different files.
+
+    // Feel free to add any additional methods or attributes you want. Please put classes in different files.
 
     public App() {
         this.configPath = "config.json";
@@ -52,7 +52,7 @@ public class App extends PApplet {
     /**
      * Initialise the setting of the window size.
      */
-	@Override
+    @Override
     public void settings() {
         size(WIDTH, HEIGHT);
     }
@@ -60,12 +60,12 @@ public class App extends PApplet {
     /**
      * Load all resources such as images. Initialise the elements such as the player and map elements.
      */
-	@Override
+    @Override
     public void setup() {
         frameRate(FPS);
-		//See PApplet javadoc:
-		//loadJSONObject(configPath)
-		// the image is loaded from relative path: "src/main/resources/inkball/..."
+        //See PApplet javadoc:
+        //loadJSONObject(configPath)
+        // the image is loaded from relative path: "src/main/resources/inkball/..."
 		/*try {
             result = loadImage(URLDecoder.decode(this.getClass().getResource(filename+".png").getPath(), StandardCharsets.UTF_8.name()));
         } catch (UnsupportedEncodingException e) {
@@ -224,7 +224,7 @@ public class App extends PApplet {
     /**
      * Receive key pressed signal from the keyboard.
      */
-	@Override
+    @Override
     public void keyPressed(KeyEvent event) {
         // Handle 'r' key press to restart the level
         if (key == 'r' || key == 'R') {
@@ -239,57 +239,47 @@ public class App extends PApplet {
     /**
      * Receive key released signal from the keyboard.
      */
-	@Override
+    @Override
     public void keyReleased(){
-        
+
     }
 
     @Override
     public void mousePressed(MouseEvent e) {
         // create a new player-drawn line object
     }
-	
-	@Override
+
+    @Override
     public void mouseDragged(MouseEvent e) {
         // add line segments to player-drawn line object if left mouse button is held
-		
-		// remove player-drawn line object if right mouse button is held 
-		// and mouse position collides with the line
+
+        // remove player-drawn line object if right mouse button is held
+        // and mouse position collides with the line
     }
 
     @Override
     public void mouseReleased(MouseEvent e) {
-		
+
     }
 
     /**
      * Draw all elements in the game by current frame.
      */
-	@Override
+    @Override
     public void draw() {
-        
-
-        //----------------------------------
-        //display Board for current level:
-        //----------------------------------
-        //TODO
-
-        //----------------------------------
-        //display score
-        //----------------------------------
-        //TODO
-        
-		//----------------------------------
-        //----------------------------------
-		//display game end message
         background(255);
         drawGrid();
+
+        // 更新并绘制所有可绘制对象
         for (Drawable drawable : drawables) {
-            drawable.draw(this);
+            if (drawable instanceof Ball) {
+                ((Ball) drawable).update(); // 更新小球位置
+            }
+            drawable.draw(this); // 绘制
         }
 
+        // 处理级别结束和计时
         if (!levelEnded) {
-            // Decrease timer
             levelTimer--;
             if (levelTimer <= 0) {
                 levelEnded = true;
@@ -297,15 +287,18 @@ public class App extends PApplet {
                 displayMessage("TIME'S UP");
             }
         } else if (levelWon) {
-            // Move to the next level
             displayMessage("LEVEL COMPLETE");
-            // Load the next level logic here
         }
 
-        // Display the timer
+        // 显示计时器
         fill(0);
         textSize(24);
         text("Timer: " + levelTimer / FPS, 10, HEIGHT - 30);
+    }
+
+
+    public static Tile[][] getGrid() {
+        return grid;
     }
 
     private void displayMessage(String message) {

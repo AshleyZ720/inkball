@@ -51,4 +51,9 @@ public class Tile implements Drawable {
     public boolean isCovered() {
         return isCovered;
     }
+
+    @Override
+    public void update() {
+
+    }
 }

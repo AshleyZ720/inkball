@@ -23,6 +23,10 @@ public class Wall implements Drawable {
         app.image(image, x * App.CELLSIZE, y * App.CELLSIZE);
     }
 
+    @Override
+    public void update() {
+
+    }
     // Getter methods for position if needed
     public int getX() { return x; }
     public int getY() { return y; }
