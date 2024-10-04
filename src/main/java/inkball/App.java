@@ -117,58 +117,90 @@ public class App extends PApplet {
                     char typeNumber = row.charAt(x + 1);
                     if (Character.isDigit(typeNumber)) {
                         String compositeType = "" + tileType + typeNumber;
-                        int type = getTileType(compositeType);
+                        //int type = getTileType(compositeType);
                         PImage overlayImg = getTileOverlayImage(compositeType);
-                        grid[x][y] = new Tile(x, y, type, tileBaseImage, overlayImg);
 
+                        Drawable drawable;
                         if (tileType == 'H') {
-                            Hole hole = new Hole(x, y, overlayImg);
-                            drawables.add(hole);
-                            grid[x + 1][y] = new Tile(x + 1, y, type, null, null);
-                            grid[x][y + 1] = new Tile(x, y + 1, type, null, null);
-                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, type, null, null);
+                            drawable = new Hole(x, y, overlayImg, typeNumber - '0');
+                            grid[x + 1][y] = new Tile(x + 1, y, new Hole(x + 1, y, overlayImg, typeNumber - '0'), null, null); // 右边的格子
+                            grid[x][y + 1] = new Tile(x, y + 1, new Hole(x, y + 1, overlayImg, typeNumber - '0'), null, null); // 下边的格子
+                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, new Hole(x + 1, y + 1, overlayImg, typeNumber - '0'), null, null);
+//                            grid[x + 1][y] = new Tile(x + 1, y, null, null, null); // 空的 Tile
+//                            grid[x][y + 1] = new Tile(x, y + 1, null, null, null); // 空的 Tile
+//                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, null, null, null);
                             grid[x + 1][y].setCovered(true);
                             grid[x][y + 1].setCovered(true);
                             grid[x + 1][y + 1].setCovered(true);
-
+                        } else {
+                            drawable = new Ball(x, y, overlayImg, typeNumber - '0');
+                            grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
+                            //grid[x + 1][y] = new Tile(x + 1, y, Tile.EMPTY, tileBaseImage, null);
                         }
-                        if (tileType == 'B') {
-                            Ball ball = new Ball(x, y, overlayImg);
-                            drawables.add(ball);
-                            grid[x + 1][y] = new Tile(x + 1, y, Tile.EMPTY, tileBaseImage, null);
-                        }
+                        drawables.add(drawable);
+                        grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
                         x += 1;
                         continue;
                     }
                 }
 
                 PImage overlayImg = getTileOverlayImage(Character.toString(tileType));
-                int tileTypeInt = getTileType(Character.toString(tileType));
-                switch (tileType) {
-                    case 'X':
-                        Wall wall = new Wall(x, y, overlayImg);
-                        drawables.add(wall);
-                        break;
-                    case 'S':
-                        Spawner spawner = new Spawner(x, y, overlayImg);
-                        drawables.add(spawner);
-                        break;
-                    default:
-                        grid[x][y] = new Tile(x, y, tileTypeInt, tileBaseImage, overlayImg);
+                if (tileType == '1' || tileType == '2' || tileType == '3' || tileType == '4') {
+                    Drawable drawable = getDrawableForTileType(Character.toString(tileType), x, y, overlayImg, tileType);
+                    grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
+                    if (drawable != null) {
+                        drawables.add(drawable);
+                    }
+                } else {
+                    Drawable drawable = getDrawableForTileType(Character.toString(tileType), x, y, overlayImg, '0');
+                    grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
+                    if (drawable != null) {
+                        drawables.add(drawable);
+                    }
                 }
+
+
             }
         }
         levelEnded = false;
         levelTimer = 300;
     }
 
-    private int getTileType(String tileType) {
+    private Class<? extends Drawable> getTileType(String tileType) {
         switch (tileType) {
-            case "X": return Tile.WALL;
-            case "S": return Tile.SPAWNER;
-            case "H0": case "H1": case "H2": case "H3": case "H4": return Tile.HOLE;
-            case "B0": case "B1": case "B2": case "B3": case "B4": return Tile.BALL;
-            default: return Tile.EMPTY;
+            case "X": return Wall.class;
+            case "1": case "2": case "3": case "4": return Wall.class;
+            case "S": return Spawner.class;
+            case "H0": case "H1": case "H2": case "H3": case "H4": return Hole.class;
+            case "B0": case "B1": case "B2": case "B3": case "B4": return Ball.class;
+            default: return null;
+        }
+    }
+
+    private Drawable getDrawableForTileType(String tileType, int x, int y, PImage overlayImage, char typeNumber) {
+        switch (tileType) {
+            case "X":
+            case "1":
+            case "2":
+            case "3":
+            case "4":
+                return new Wall(x, y, overlayImage, typeNumber - '0');
+            case "S":
+                return new Spawner(x, y, overlayImage);
+            case "H0":
+            case "H1":
+            case "H2":
+            case "H3":
+            case "H4":
+                return new Hole(x, y, overlayImage, typeNumber - '0');
+            case "B0":
+            case "B1":
+            case "B2":
+            case "B3":
+            case "B4":
+                return new Ball(x, y, overlayImage, typeNumber - '0');
+            default:
+                return null;
         }
     }
 
@@ -283,32 +315,32 @@ public class App extends PApplet {
     }
 
     private void drawGrid() {
-        // Step 1: draw every Tile.EMPTY
+        // Step 1: Draw every empty tile
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
                 Tile tile = grid[x][y];
-                if (tile != null && tile.getType() == Tile.EMPTY) {
-                    tile.draw(this);
+                if (tile != null && tile.isEmpty() && !tile.isCovered()) {
+                    tile.draw(this); // Draw empty tile
                 }
             }
         }
 
-        // Step 2: draw the other tile (expect for balls)
+        // Step 2: Draw other tiles (except for balls)
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
                 Tile tile = grid[x][y];
-                if (tile != null && tile.getType() != Tile.EMPTY && tile.getType() != Tile.BALL) {
-                    tile.draw(this);
+                if (tile != null && !tile.isEmpty() && !tile.isCovered() && !(tile.getDrawable() instanceof Ball)) {
+                    tile.draw(this); // Draw drawable tile (not ball)
                 }
             }
         }
 
-        // Step 3: draw balls
+        // Step 3: Draw balls
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
                 Tile tile = grid[x][y];
-                if (tile != null && tile.getType() == Tile.BALL) {
-                    tile.draw(this);
+                if (tile != null && !tile.isEmpty() && tile.getDrawable() instanceof Ball) {
+                    tile.draw(this); // Draw balls
                 }
             }
         }

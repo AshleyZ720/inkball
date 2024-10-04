@@ -4,22 +4,16 @@ import processing.core.PApplet;
 import processing.core.PImage;
 
 public class Tile implements Drawable {
-    public static final int EMPTY = 0;
-    public static final int WALL = 1;
-    public static final int HOLE = 2;
-    public static final int SPAWNER = 3;
-    public static final int BALL = 4;
-
     private int x, y;  // Position on the grid
-    private int type;  // Tile type
+    private Drawable drawable;   // Tile type
     private PImage baseImage;  // The base tile image (tile.png)
     private PImage overlayImage;
     private boolean isCovered;
 
-    public Tile(int x, int y, int type, PImage baseImage, PImage overlayImage) {
+    public Tile(int x, int y, Drawable drawable, PImage baseImage, PImage overlayImage) {
         this.x = x;
         this.y = y;
-        this.type = type;
+        this.drawable = drawable;
         this.baseImage = baseImage;
         this.overlayImage = overlayImage;
         this.isCovered = false;
@@ -33,10 +27,21 @@ public class Tile implements Drawable {
         if (overlayImage != null) {
             app.image(overlayImage, x * App.CELLSIZE, y * App.CELLSIZE);
         }
+        if (drawable != null) {
+            drawable.draw(app);
+        }
     }
 
-    public int getType() {
-        return type;
+    public Drawable getDrawable() {
+        return drawable;
+    }
+
+    public void setDrawable(Drawable drawable) {
+        this.drawable = drawable;
+    }
+
+    public boolean isEmpty() {
+        return drawable == null;
     }
 
     public void setCovered(boolean covered) {
