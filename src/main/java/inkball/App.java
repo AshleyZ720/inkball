@@ -254,6 +254,8 @@ public class App extends PApplet{
         if (e.getButton() == LEFT) {
             currentLine = new PlayerLine();
             currentLine.addPoint(e.getX(), e.getY());
+        } else if (e.getButton() == RIGHT || (e.getButton() == LEFT && e.isControlDown())) {
+            removeLine(e.getX(), e.getY());
         }
     }
 
@@ -295,35 +297,47 @@ public class App extends PApplet{
         background(255);
         drawGrid();
 
-
-
-        // 更新所有小球的位置
         List<Ball> balls = new ArrayList<>();
+        List<Collidable> collidables = new ArrayList<>();
+        List<Drawable> nonBallDrawables = new ArrayList<>();
+
+        // First pass: Separate balls, collidables, and other drawables
         for (Drawable drawable : drawables) {
             if (drawable instanceof Ball) {
                 Ball ball = (Ball) drawable;
                 ball.update();
-
-                // 检查与玩家线条的碰撞
-                Iterator<PlayerLine> lineIterator = playerLines.iterator();
-                while (lineIterator.hasNext()) {
-                    PlayerLine line = lineIterator.next();
-                    if (line.checkCollision(ball)) {
-                        lineIterator.remove();
-                        break;
-                    }
-                }
-
                 balls.add(ball);
             } else {
-                drawable.draw(this);
+                nonBallDrawables.add(drawable);
+                if (drawable instanceof Collidable) {
+                    collidables.add((Collidable) drawable);
+                }
             }
         }
 
+        // Add player lines to collidables
+        collidables.addAll(playerLines);
+
+        // Check collisions
+        for (Ball ball : balls) {
+            for (Collidable collidable : collidables) {
+                if (collidable.checkCollision(ball)) {
+                    break; // Ball has collided, move to next ball
+                }
+            }
+        }
+
+        // Drawing phase
+        // 1. Draw non-ball drawables (including spawners)
+        for (Drawable drawable : nonBallDrawables) {
+            drawable.draw(this);
+        }
+
+        // 2. Draw balls on top
         for (Ball ball : balls) {
             ball.draw(this);
         }
-
+        // 3. Draw player lines
         for (PlayerLine line : playerLines) {
             line.draw(this);
         }
@@ -331,7 +345,7 @@ public class App extends PApplet{
             currentLine.draw(this);
         }
 
-        // 绘制所有小球
+
 
 
         // 处理级别结束和计时

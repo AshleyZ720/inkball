@@ -41,75 +41,16 @@ public class Ball implements Drawable {
         x += vx;
         y += vy;
 
-        // Collision detection
-        checkCollision();
+
     }
 
-    private void checkCollision() {
-        int gridX = (int) (x / App.CELLSIZE);
-        int gridY = (int) (y / App.CELLSIZE);
-
-        float totalCollisionX = 0;
-        float totalCollisionY = 0;
-        int collisionCount = 0;
-
-        // Loop over neighboring tiles
-        for (int i = gridX - 1; i <= gridX + 1; i++) {
-            for (int j = gridY - 1; j <= gridY + 1; j++) {
-                if (i >= 0 && i < App.BOARD_WIDTH && j >= 0 && j < App.BOARD_HEIGHT) {
-                    Tile tile = App.getGrid()[i][j];
-                    if (tile != null && tile.getDrawable() instanceof Wall) {
-                        float left = i * App.CELLSIZE;
-                        float right = left + App.CELLSIZE;
-                        float top = j * App.CELLSIZE;
-                        float bottom = top + App.CELLSIZE;
-
-                        // Find the closest point on the wall to the ball
-                        float closestX = clamp(x, left, right);
-                        float closestY = clamp(y, top, bottom);
-
-                        // Calculate the distance between the ball's center and this closest point
-                        float distanceX = x - closestX;
-                        float distanceY = y - closestY;
-
-                        // If the distance is less than the radius, there's a collision
-                        float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-                        if (distanceSquared < radius * radius) {
-                            float distance = (float) Math.sqrt(distanceSquared);
-                            float overlap = radius - distance;
-
-                            // Normalize the collision vector
-                            float collisionX = distanceX / distance;
-                            float collisionY = distanceY / distance;
-
-                            totalCollisionX += collisionX;
-                            totalCollisionY += collisionY;
-                            collisionCount++;
-
-                            // Adjust the ball's position to prevent overlap
-                            x += collisionX * overlap / 2; // Divide by 2 to avoid over-correction
-                            y += collisionY * overlap / 2;
-                        }
-                    }
-                }
+    public Collidable checkCollisions(Collidable[] collidables) {
+        for (Collidable collidable : collidables) {
+            if (collidable.checkCollision(this)) {
+                return collidable;
             }
         }
-
-        // If there were any collisions, calculate the average collision vector
-        if (collisionCount > 0) {
-            float avgCollisionX = totalCollisionX / collisionCount;
-            float avgCollisionY = totalCollisionY / collisionCount;
-
-            // Normalize the average collision vector
-            float magnitude = (float) Math.sqrt(avgCollisionX * avgCollisionX + avgCollisionY * avgCollisionY);
-            avgCollisionX /= magnitude;
-            avgCollisionY /= magnitude;
-
-            // Reflect the velocity vector based on the average collision normal
-            float dotProduct = vx * avgCollisionX + vy * avgCollisionY;
-            vx -= 2 * dotProduct * avgCollisionX;
-            vy -= 2 * dotProduct * avgCollisionY;
-        }
+        return null;
     }
 
     private float clamp(float value, float min, float max) {
