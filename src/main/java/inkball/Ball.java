@@ -116,5 +116,39 @@ public class Ball implements Drawable {
         return Math.max(min, Math.min(max, value));
     }
 
+    public float getX() {
+        return x;
+    }
 
+    public void setX(float x) {
+        this.x = x;
+    }
+
+    public float getY() {
+        return y;
+    }
+
+    public void setY(float y) {
+        this.y = y;
+    }
+
+    public float getVx() {
+        return vx;
+    }
+
+    public void setVx(float vx) {
+        this.vx = vx;
+    }
+
+    public float getVy() {
+        return vy;
+    }
+
+    public void setVy(float vy) {
+        this.vy = vy;
+    }
+
+    public int getRadius() {
+        return radius;
+    }
 }

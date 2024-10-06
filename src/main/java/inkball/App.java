@@ -44,7 +44,8 @@ public class App extends PApplet{
 
     public static Random random = new Random();
 
-    // Feel free to add any additional methods or attributes you want. Please put classes in different files.
+    private List<PlayerLine> playerLines;
+    private PlayerLine currentLine;
 
     public App() {
         this.configPath = "config.json";
@@ -74,7 +75,8 @@ public class App extends PApplet{
         }*/
         tileBaseImage = loadImage("src/main/resources/inkball/tile.png");
         loadImages();
-        loadLevel("level3.txt");
+        loadLevel("level2.txt");
+        playerLines = new ArrayList<>();
     }
 
     private PImage loadImageFromResources(String filename) throws UnsupportedEncodingException {
@@ -249,20 +251,40 @@ public class App extends PApplet{
 
     @Override
     public void mousePressed(MouseEvent e) {
-        // create a new player-drawn line object
+        if (e.getButton() == LEFT) {
+            currentLine = new PlayerLine();
+            currentLine.addPoint(e.getX(), e.getY());
+        }
     }
 
     @Override
     public void mouseDragged(MouseEvent e) {
-        // add line segments to player-drawn line object if left mouse button is held
-
-        // remove player-drawn line object if right mouse button is held
-        // and mouse position collides with the line
+        if (e.getButton() == LEFT) {
+            if (currentLine != null) {
+                currentLine.addPoint(e.getX(), e.getY());
+            }
+        } else if (e.getButton() == RIGHT || (e.getButton() == LEFT && e.isControlDown())) {
+            removeLine(e.getX(), e.getY());
+        }
     }
 
     @Override
     public void mouseReleased(MouseEvent e) {
+        if (e.getButton() == LEFT && currentLine != null) {
+            playerLines.add(currentLine);
+            currentLine = null;
+        }
+    }
 
+    private void removeLine(float x, float y) {
+        Iterator<PlayerLine> iterator = playerLines.iterator();
+        while (iterator.hasNext()) {
+            PlayerLine line = iterator.next();
+            if (line.containsPoint(x, y)) {
+                iterator.remove();
+                break;
+            }
+        }
     }
 
     /**
@@ -273,21 +295,44 @@ public class App extends PApplet{
         background(255);
         drawGrid();
 
+
+
         // 更新所有小球的位置
         List<Ball> balls = new ArrayList<>();
         for (Drawable drawable : drawables) {
             if (drawable instanceof Ball) {
-                ((Ball) drawable).update();
-                balls.add((Ball) drawable); // 将小球添加到单独的列表
+                Ball ball = (Ball) drawable;
+                ball.update();
+
+                // 检查与玩家线条的碰撞
+                Iterator<PlayerLine> lineIterator = playerLines.iterator();
+                while (lineIterator.hasNext()) {
+                    PlayerLine line = lineIterator.next();
+                    if (line.checkCollision(ball)) {
+                        lineIterator.remove();
+                        break;
+                    }
+                }
+
+                balls.add(ball);
             } else {
-                drawable.draw(this); // 绘制其他物体（包括 Spawner）
+                drawable.draw(this);
             }
         }
 
-        // 绘制所有小球，确保在其他物体之后绘制
         for (Ball ball : balls) {
             ball.draw(this);
         }
+
+        for (PlayerLine line : playerLines) {
+            line.draw(this);
+        }
+        if (currentLine != null) {
+            currentLine.draw(this);
+        }
+
+        // 绘制所有小球
+
 
         // 处理级别结束和计时
         if (!levelEnded) {
