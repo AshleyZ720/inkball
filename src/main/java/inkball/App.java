@@ -7,6 +7,7 @@ import processing.data.JSONObject;
 import processing.event.KeyEvent;
 import processing.event.MouseEvent;
 
+import javax.swing.*;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.io.*;
 import java.util.*;
 
-public class App extends PApplet {
+public class App extends PApplet{
 
     public static final int CELLSIZE = 32; //8;
     public static final int CELLHEIGHT = 32;
@@ -123,6 +124,7 @@ public class App extends PApplet {
                         Drawable drawable;
                         if (tileType == 'H') {
                             drawable = new Hole(x, y, overlayImg, typeNumber - '0');
+                            grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
                             grid[x + 1][y] = new Tile(x + 1, y, new Hole(x + 1, y, overlayImg, typeNumber - '0'), null, null); // 右边的格子
                             grid[x][y + 1] = new Tile(x, y + 1, new Hole(x, y + 1, overlayImg, typeNumber - '0'), null, null); // 下边的格子
                             grid[x + 1][y + 1] = new Tile(x + 1, y + 1, new Hole(x + 1, y + 1, overlayImg, typeNumber - '0'), null, null);
@@ -135,10 +137,11 @@ public class App extends PApplet {
                         } else {
                             drawable = new Ball(x, y, overlayImg, typeNumber - '0');
                             grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
+                            grid[x][y] = new Tile(x, y, null, tileBaseImage, null);
                             //grid[x + 1][y] = new Tile(x + 1, y, Tile.EMPTY, tileBaseImage, null);
                         }
                         drawables.add(drawable);
-                        grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
+
                         x += 1;
                         continue;
                     }
@@ -270,12 +273,20 @@ public class App extends PApplet {
         background(255);
         drawGrid();
 
-        // 更新并绘制所有可绘制对象
+        // 更新所有小球的位置
+        List<Ball> balls = new ArrayList<>();
         for (Drawable drawable : drawables) {
             if (drawable instanceof Ball) {
-                ((Ball) drawable).update(); // 更新小球位置
+                ((Ball) drawable).update();
+                balls.add((Ball) drawable); // 将小球添加到单独的列表
+            } else {
+                drawable.draw(this); // 绘制其他物体（包括 Spawner）
             }
-            drawable.draw(this); // 绘制
+        }
+
+        // 绘制所有小球，确保在其他物体之后绘制
+        for (Ball ball : balls) {
+            ball.draw(this);
         }
 
         // 处理级别结束和计时
@@ -328,15 +339,7 @@ public class App extends PApplet {
             }
         }
 
-        // Step 3: Draw balls
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            for (int y = 0; y < BOARD_HEIGHT; y++) {
-                Tile tile = grid[x][y];
-                if (tile != null && !tile.isEmpty() && tile.getDrawable() instanceof Ball) {
-                    tile.draw(this); // Draw balls
-                }
-            }
-        }
+
     }
 
     public static void main(String[] args) {
