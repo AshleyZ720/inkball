@@ -13,6 +13,8 @@ public class Ball implements Drawable {
     private static final float MIN_RADIUS = 0.5f;
     private static final float SIZE_ADJUSTMENT_SPEED = 2.0f;
     private boolean captured = false;
+    private boolean isGrowing = false;
+    private static final float GROWTH_SPEED = 0.1f;
 
     public Ball(int x, int y, PImage image, int type) {
         this.x = x * App.CELLSIZE + App.CELLSIZE / 2f;
@@ -58,6 +60,27 @@ public class Ball implements Drawable {
             radius = PApplet.map(sizeRatio, 0, 1, MIN_RADIUS, ORIGINAL_RADIUS);
         } else {
             radius = ORIGINAL_RADIUS;
+        }
+    }
+
+    public void adjustSizes(float distance, float maxDistance) {
+        if (distance <= maxDistance && !isGrowing) {
+            float sizeRatio = distance / maxDistance;
+            sizeRatio = (float) Math.pow(sizeRatio, SIZE_ADJUSTMENT_SPEED);
+            float newRadius = PApplet.map(sizeRatio, 0, 1, MIN_RADIUS, ORIGINAL_RADIUS);
+
+            if (newRadius > radius) {
+                isGrowing = true;
+            } else {
+                radius = newRadius;
+            }
+        }
+
+        if (isGrowing || distance > maxDistance) {
+            radius = Math.min(radius + GROWTH_SPEED, ORIGINAL_RADIUS);
+            if (radius >= ORIGINAL_RADIUS) {
+                isGrowing = false;
+            }
         }
     }
 

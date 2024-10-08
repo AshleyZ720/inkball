@@ -30,12 +30,13 @@ public class App extends PApplet{
 
     public static final int INITIAL_PARACHUTES = 1;
 
-    public static final int FPS = 30;
+    public static final float FPS = 30.0f;
 
     private JSONObject config;
     private JSONArray levels;
     private int currentLevelIndex = 0;
     private Level currentLevel;
+    private int timeBonus = 0;
 
     public String configPath;
     private static Tile[][] grid;
@@ -43,7 +44,7 @@ public class App extends PApplet{
     private PImage wall0, wall1, wall2, wall3, wall4;
     private PImage ball0, ball1, ball2, ball3, ball4;
     private PImage spawner, hole;
-    private int levelTimer = 300; // Example timer in frames (10 seconds at 30 FPS)
+    private float levelTimer = 0; // Example timer in frames (10 seconds at 30 FPS)
     private boolean levelEnded = false;
     private boolean levelWon = false;
     private PImage tileBaseImage;
@@ -56,6 +57,9 @@ public class App extends PApplet{
     private int score = 0;
     private List<Ball> ballsToRespawn = new ArrayList<>();
     private List<Spawner> spawners = new ArrayList<>();
+
+    private List<String> ballQueue; // 未生成的球队列
+    private float spawnTimer;
 
     public App() {
         this.configPath = "config.json";
@@ -74,19 +78,27 @@ public class App extends PApplet{
      */
     @Override
     public void setup() {
-        frameRate(FPS);
-        //See PApplet javadoc:
-        //loadJSONObject(configPath)
-        // the image is loaded from relative path: "src/main/resources/inkball/..."
-		/*try {
-            result = loadImage(URLDecoder.decode(this.getClass().getResource(filename+".png").getPath(), StandardCharsets.UTF_8.name()));
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
-        }*/
-        tileBaseImage = loadImage("src/main/resources/inkball/tile.png");
-        loadImages();
-        loadLevel("level3.txt");
-        playerLines = new ArrayList<>();
+        try {
+            frameRate(FPS);
+            tileBaseImage = loadImage("src/main/resources/inkball/tile.png");
+            loadImages();
+
+            // 加载配置文件
+            config = loadJSONObject("config.json");
+            if (config == null) {
+                System.err.println("Failed to load config.json");
+            } else {
+                System.out.println("Config loaded successfully: " + config);
+            }
+
+            levels = config.getJSONArray("levels");
+            playerLines = new ArrayList<>();
+
+            // 加载第一个关卡
+            loadLevel(currentLevelIndex);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private PImage loadImageFromResources(String filename) throws UnsupportedEncodingException {
@@ -117,7 +129,37 @@ public class App extends PApplet{
         }
     }
 
-    public void loadLevel(String fileName) {
+    public void loadLevel(int levelIndex) {
+        if (levelIndex >= levels.size()) {
+            // 游戏结束，所有关卡完成
+            displayMessage("Congratulations! You've completed all levels.");
+            return;
+        }
+
+        JSONObject levelData = levels.getJSONObject(levelIndex);
+        currentLevel = new Level(levelData);
+
+        // 重置关卡状态
+        levelTimer = currentLevel.time * FPS; // 将秒转换为帧数
+        spawnTimer = currentLevel.spawnInterval * FPS; // 将秒转换为帧数
+
+        // 加载关卡布局
+        loadLevelLayout(currentLevel.layout);
+
+        // 初始化未生成的球队列
+        ballQueue = new ArrayList<>(currentLevel.balls);
+
+        // 其他初始化
+        score = 0;
+        ballsToRespawn.clear();
+        //spawners.clear();
+        levelEnded = false;
+        levelWon = false;
+
+        spawnNextBall();
+    }
+
+    public void loadLevelLayout(String fileName) {
         String[] rows = loadStrings(fileName);
         grid = new Tile[BOARD_WIDTH][BOARD_HEIGHT];
         drawables = new ArrayList<>();
@@ -168,6 +210,14 @@ public class App extends PApplet{
                     if (drawable != null) {
                         drawables.add(drawable);
                     }
+                } else if (tileType == 'S') {
+                    Spawner spawner = new Spawner(x, y, overlayImg);
+                    grid[x][y] = new Tile(x, y, spawner, tileBaseImage, overlayImg);
+
+                    drawables.add(spawner);
+                    spawners.add(spawner);
+                    //System.out.println("Added Spawner at (" + x + ", " + y + ")");
+
                 } else {
                     Drawable drawable = getDrawableForTileType(Character.toString(tileType), x, y, overlayImg, '0');
                     grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
@@ -179,8 +229,8 @@ public class App extends PApplet{
 
             }
         }
-        levelEnded = false;
-        levelTimer = 300;
+        //levelEnded = false;
+        //levelTimer = 300;
     }
 
     private Class<? extends Drawable> getTileType(String tileType) {
@@ -248,7 +298,7 @@ public class App extends PApplet{
             if (levelEnded) {
                 levelEnded = false;
                 levelWon = false;
-                loadLevel("src/main/resources/inkball/level1.txt"); // Reload the current level
+                //loadLevel("src/main/resources/inkball/level1.txt"); // Reload the current level
             }
         }
     }
@@ -301,16 +351,54 @@ public class App extends PApplet{
     }
 
     private void drawUI() {
+
+
         textAlign(RIGHT, TOP);
         textSize(24);
         fill(0);
 
         text("Score: " + score, width - 10, 10);
 
-        text("Time: " + (levelTimer / FPS), width - 10, 40);
+        text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), width - 10, 40);
 
-        textAlign(LEFT, TOP);
-        //spawn_interval time count down
+
+    }
+
+    private void drawBallQueue() {
+        int maxDisplay = Math.min(5, ballQueue.size());
+        for (int i = 0; i < maxDisplay; i++) {
+            String ballColor = ballQueue.get(i);
+            PImage ballImage = getBallImageByColor(ballColor);
+
+            // 绘制球图像
+            image(ballImage, 10 + i * (App.CELLSIZE + 5), 10, App.CELLSIZE, App.CELLSIZE);
+        }
+        if (!ballQueue.isEmpty()) {
+            fill(0);
+            textSize(16);
+            textAlign(LEFT, TOP);
+            text(String.format("%.1f", spawnTimer / FPS), 10, 10 + App.CELLSIZE + 5);
+        }
+
+        // 绘制生成计时器
+
+    }
+
+    private PImage getBallImageByColor(String color) {
+        switch (color.toLowerCase()) {
+            case "blue":
+                return ball2;
+            case "orange":
+                return ball1;
+            case "green":
+                return ball3;
+            case "yellow":
+                return ball4;
+            case "grey":
+                return ball0;
+            default:
+                return ball0;
+        }
     }
 
     /**
@@ -320,6 +408,7 @@ public class App extends PApplet{
     public void draw() {
         background(255);
         drawUI();
+        drawBallQueue();
 
 
         pushMatrix();
@@ -398,17 +487,33 @@ public class App extends PApplet{
         }
         popMatrix();
 
-        // Handle level end and timer
         if (!levelEnded) {
             levelTimer--;
+
+            if (!ballQueue.isEmpty()) {
+                if (spawnTimer <= 0) {
+                    spawnNextBall(); // 先生成球
+                    spawnTimer = currentLevel.spawnInterval * FPS; // 然后重置生成计时器
+                } else {
+                    spawnTimer--;
+                }
+            }
+
             if (levelTimer <= 0) {
                 levelEnded = true;
                 levelWon = false;
                 displayMessage("TIME'S UP");
             }
-        } else if (levelWon) {
-            displayMessage("LEVEL COMPLETE");
+        } else {
+            // 如果关卡结束，停止球的移动和玩家的操作
+            // 可以在这里实现
         }
+
+//        // 显示计时器
+//        fill(0);
+//        textSize(24);
+//        text(String.format("Timer: %.1f", levelTimer / FPS), 10, HEIGHT - 30);
+//        text("Score: " + score, 10, HEIGHT - 60);
 
         //drawUI();
 
@@ -418,6 +523,56 @@ public class App extends PApplet{
 //        textSize(24);
 //        text("Timer: " + levelTimer / FPS, 10, HEIGHT - 30);
 //        text("Score: " + score, 10, HEIGHT - 60);
+    }
+
+    private void spawnNextBall() {
+        if (!ballQueue.isEmpty()) {
+            String nextBallColor = ballQueue.remove(0);
+            PImage ballImage = getBallImageByColor(nextBallColor);
+            int ballType = getBallTypeByColor(nextBallColor);
+
+            // 从随机的Spawner生成球
+            if (!spawners.isEmpty()) {
+                Spawner spawner = spawners.get(random.nextInt(spawners.size()));
+                Ball newBall = new Ball(spawner.getX(), spawner.getY(), ballImage, ballType);
+                drawables.add(newBall);
+                //System.out.println("Spawned Ball of type " + ballType + " at (" + newBall.getX() + ", " + newBall.getY() + ")");
+            } else {
+                //System.err.println("No spawners available to spawn ball.");
+            }
+        }
+    }
+
+    private int getBallTypeByColor(String color) {
+        switch (color.toLowerCase()) {
+            case "blue":
+                return 2;
+            case "orange":
+                return 1;
+            case "green":
+                return 3;
+            case "yellow":
+                return 4;
+            case "grey":
+            default:
+                return 0;
+        }
+    }
+
+    private String getColorByType(int type) {
+        switch (type) {
+            case 1:
+                return "orange";
+            case 2:
+                return "blue";
+            case 3:
+                return "green";
+            case 4:
+                return "yellow";
+            case 0:
+            default:
+                return "grey";
+        }
     }
 
 
@@ -476,6 +631,12 @@ public class App extends PApplet{
 
     public void respawnBall(Ball ball) {
         ballsToRespawn.add(ball);
+        String color = getColorByType(ball.getType());
+        ballQueue.add(color);
+
+        if (ballQueue.size() == 1 && spawnTimer > 0) {
+            spawnTimer = 0; // 立即触发生成
+        }
     }
 
     private void resetBallPosition(Ball ball) {

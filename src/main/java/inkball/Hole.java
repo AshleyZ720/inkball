@@ -69,7 +69,7 @@ public class Hole implements Drawable {
                 app.increaseScore();
             } else {
                 app.decreaseScore();
-                //app.respawnBall(ball);
+                app.respawnBall(ball);
             }
         }
     }
