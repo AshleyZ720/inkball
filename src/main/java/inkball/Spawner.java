@@ -22,4 +22,11 @@ public class Spawner implements Drawable {
     public void update() {
 
     }
+
+    public int getX() {
+        return x;
+    }
+    public int getY() {
+        return y;
+    }
 }

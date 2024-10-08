@@ -26,10 +26,16 @@ public class App extends PApplet{
     public static int HEIGHT = 640; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
     public static final int BOARD_WIDTH = WIDTH/CELLSIZE;
     public static final int BOARD_HEIGHT = 20;
+    public static final int TOP_MARGIN = 70;
 
     public static final int INITIAL_PARACHUTES = 1;
 
     public static final int FPS = 30;
+
+    private JSONObject config;
+    private JSONArray levels;
+    private int currentLevelIndex = 0;
+    private Level currentLevel;
 
     public String configPath;
     private static Tile[][] grid;
@@ -46,6 +52,10 @@ public class App extends PApplet{
 
     private List<PlayerLine> playerLines;
     private PlayerLine currentLine;
+
+    private int score = 0;
+    private List<Ball> ballsToRespawn = new ArrayList<>();
+    private List<Spawner> spawners = new ArrayList<>();
 
     public App() {
         this.configPath = "config.json";
@@ -75,7 +85,7 @@ public class App extends PApplet{
         }*/
         tileBaseImage = loadImage("src/main/resources/inkball/tile.png");
         loadImages();
-        loadLevel("level2.txt");
+        loadLevel("level3.txt");
         playerLines = new ArrayList<>();
     }
 
@@ -126,16 +136,18 @@ public class App extends PApplet{
                         Drawable drawable;
                         if (tileType == 'H') {
                             drawable = new Hole(x, y, overlayImg, typeNumber - '0');
+                            //Hole hole = new Hole(x, y, overlayImg, typeNum);
+
                             grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
-                            grid[x + 1][y] = new Tile(x + 1, y, new Hole(x + 1, y, overlayImg, typeNumber - '0'), null, null); // 右边的格子
-                            grid[x][y + 1] = new Tile(x, y + 1, new Hole(x, y + 1, overlayImg, typeNumber - '0'), null, null); // 下边的格子
-                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, new Hole(x + 1, y + 1, overlayImg, typeNumber - '0'), null, null);
-//                            grid[x + 1][y] = new Tile(x + 1, y, null, null, null); // 空的 Tile
-//                            grid[x][y + 1] = new Tile(x, y + 1, null, null, null); // 空的 Tile
-//                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, null, null, null);
+                            grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
+                            grid[x][y + 1] = new Tile(x, y + 1, null, tileBaseImage, null);
+                            grid[x + 1][y + 1] = new Tile(x + 1, y + 1, null, tileBaseImage, null);
                             grid[x + 1][y].setCovered(true);
                             grid[x][y + 1].setCovered(true);
                             grid[x + 1][y + 1].setCovered(true);
+                            //drawables.add(grid[x + 1][y]);
+                            //drawables.add(grid[x][y + 1]);
+                            //drawables.add(grid[x + 1][y + 1]);
                         } else {
                             drawable = new Ball(x, y, overlayImg, typeNumber - '0');
                             grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
@@ -249,13 +261,12 @@ public class App extends PApplet{
 
     }
 
-    @Override
     public void mousePressed(MouseEvent e) {
         if (e.getButton() == LEFT) {
             currentLine = new PlayerLine();
-            currentLine.addPoint(e.getX(), e.getY());
+            currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
         } else if (e.getButton() == RIGHT || (e.getButton() == LEFT && e.isControlDown())) {
-            removeLine(e.getX(), e.getY());
+            removeLine(e.getX(), e.getY() - TOP_MARGIN);
         }
     }
 
@@ -263,10 +274,10 @@ public class App extends PApplet{
     public void mouseDragged(MouseEvent e) {
         if (e.getButton() == LEFT) {
             if (currentLine != null) {
-                currentLine.addPoint(e.getX(), e.getY());
+                currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
             }
         } else if (e.getButton() == RIGHT || (e.getButton() == LEFT && e.isControlDown())) {
-            removeLine(e.getX(), e.getY());
+            removeLine(e.getX(), e.getY() - TOP_MARGIN);
         }
     }
 
@@ -289,17 +300,37 @@ public class App extends PApplet{
         }
     }
 
+    private void drawUI() {
+        textAlign(RIGHT, TOP);
+        textSize(24);
+        fill(0);
+
+        text("Score: " + score, width - 10, 10);
+
+        text("Time: " + (levelTimer / FPS), width - 10, 40);
+
+        textAlign(LEFT, TOP);
+        //spawn_interval time count down
+    }
+
     /**
      * Draw all elements in the game by current frame.
      */
     @Override
     public void draw() {
         background(255);
+        drawUI();
+
+
+        pushMatrix();
+        translate(0, TOP_MARGIN);
         drawGrid();
+
 
         List<Ball> balls = new ArrayList<>();
         List<Collidable> collidables = new ArrayList<>();
         List<Drawable> nonBallDrawables = new ArrayList<>();
+        List<Ball> ballsToRemove = new ArrayList<>();
 
         // First pass: Separate balls, collidables, and other drawables
         for (Drawable drawable : drawables) {
@@ -327,6 +358,25 @@ public class App extends PApplet{
             }
         }
 
+
+        // Apply hole attraction
+        for (Drawable drawable : nonBallDrawables) {
+            if (drawable instanceof Hole) {
+                Hole hole = (Hole) drawable;
+                for (Ball ball : balls) {
+                    hole.attractBall(ball, this);
+                    if (ball.isCaptured()) {
+                        ballsToRemove.add(ball);
+                    }
+                }
+            }
+        }
+
+        // Remove captured balls
+        for (Ball ball : ballsToRemove) {
+            drawables.remove(ball);
+        }
+
         // Drawing phase
         // 1. Draw non-ball drawables (including spawners)
         for (Drawable drawable : nonBallDrawables) {
@@ -337,6 +387,8 @@ public class App extends PApplet{
         for (Ball ball : balls) {
             ball.draw(this);
         }
+
+
         // 3. Draw player lines
         for (PlayerLine line : playerLines) {
             line.draw(this);
@@ -344,11 +396,9 @@ public class App extends PApplet{
         if (currentLine != null) {
             currentLine.draw(this);
         }
+        popMatrix();
 
-
-
-
-        // 处理级别结束和计时
+        // Handle level end and timer
         if (!levelEnded) {
             levelTimer--;
             if (levelTimer <= 0) {
@@ -360,10 +410,14 @@ public class App extends PApplet{
             displayMessage("LEVEL COMPLETE");
         }
 
-        // 显示计时器
-        fill(0);
-        textSize(24);
-        text("Timer: " + levelTimer / FPS, 10, HEIGHT - 30);
+        //drawUI();
+
+
+        // Display timer and score
+//        fill(0);
+//        textSize(24);
+//        text("Timer: " + levelTimer / FPS, 10, HEIGHT - 30);
+//        text("Score: " + score, 10, HEIGHT - 60);
     }
 
 
@@ -377,28 +431,70 @@ public class App extends PApplet{
         text(message, WIDTH / 2 - textWidth(message) / 2, 50);
     }
 
+    private void drawBallTypes() {
+        int ballSize = 30;
+        int spacing = 10;
+        int startX = 10;
+        int startY = 10;
+
+        // 假设您有一个包含所有球类型图像的数组
+        PImage[] ballImages = {ball0, ball1, ball2, ball3, ball4};
+
+        for (int i = 0; i < ballImages.length; i++) {
+            image(ballImages[i], startX + i * (ballSize + spacing), startY, ballSize, ballSize);
+        }
+    }
+
+
     private void drawGrid() {
-        // Step 1: Draw every empty tile
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
                 Tile tile = grid[x][y];
                 if (tile != null && tile.isEmpty() && !tile.isCovered()) {
-                    tile.draw(this); // Draw empty tile
+                    tile.draw(this);
                 }
             }
         }
 
-        // Step 2: Draw other tiles (except for balls)
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
                 Tile tile = grid[x][y];
-                if (tile != null && !tile.isEmpty() && !tile.isCovered() && !(tile.getDrawable() instanceof Ball)) {
-                    tile.draw(this); // Draw drawable tile (not ball)
+                if (tile != null && !tile.isEmpty() && !tile.isCovered()) {
+                    tile.draw(this);
                 }
             }
         }
+    }
 
+    public void increaseScore() {
+        score += 10; // Adjust the score increment as needed
+    }
 
+    public void decreaseScore() {
+        score -= 5; // Adjust the score decrement as needed
+    }
+
+    public void respawnBall(Ball ball) {
+        ballsToRespawn.add(ball);
+    }
+
+    private void resetBallPosition(Ball ball) {
+        if (!spawners.isEmpty()) {
+            Spawner spawner = spawners.get(random.nextInt(spawners.size()));
+            ball.setX(spawner.getX());
+            ball.setY(spawner.getY());
+            // Reset velocity
+            float baseSpeed = 2.0f;
+            if (FPS == 60) {
+                baseSpeed /= 2;
+            }
+            ball.setVx(random.nextBoolean() ? baseSpeed : -baseSpeed);
+            ball.setVy(random.nextBoolean() ? baseSpeed : -baseSpeed);
+        }
+    }
+
+    public List<Drawable> getDrawables() {
+        return drawables;
     }
 
     public static void main(String[] args) {

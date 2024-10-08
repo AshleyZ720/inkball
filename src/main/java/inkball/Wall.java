@@ -34,7 +34,7 @@ public class Wall implements Drawable, Collidable {
     public boolean checkCollision(Ball ball) {
         float ballX = ball.getX();
         float ballY = ball.getY();
-        int radius = ball.getRadius();
+        float radius = ball.getRadius();
 
         float left = x * App.CELLSIZE;
         float right = left + App.CELLSIZE;
