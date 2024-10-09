@@ -9,6 +9,8 @@ public class Tile implements Drawable {
     private PImage baseImage;  // The base tile image (tile.png)
     private PImage overlayImage;
     private boolean isCovered;
+    private PImage originalOverlayImage;
+
 
 
     public Tile(int x, int y, Drawable drawable, PImage baseImage, PImage overlayImage) {
@@ -16,7 +18,7 @@ public class Tile implements Drawable {
         this.y = y;
         this.drawable = drawable;
         this.baseImage = baseImage;
-        this.overlayImage = overlayImage;
+        this.originalOverlayImage = overlayImage;
         this.isCovered = false;
     }
 
@@ -56,5 +58,17 @@ public class Tile implements Drawable {
     @Override
     public void update() {
 
+    }
+
+    public PImage getOverlayImage() {
+        return overlayImage;
+    }
+
+    public void setOverlayImage(PImage newOverlayImage) {
+        this.overlayImage = newOverlayImage;
+    }
+
+    public void resetOverlayImage() {
+        this.overlayImage = originalOverlayImage;
     }
 }

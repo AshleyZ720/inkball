@@ -23,9 +23,9 @@ public class App extends PApplet{
     public static final int CELLAVG = 32;
     public static final int TOPBAR = 0;
     public static int WIDTH = 576; //CELLSIZE*BOARD_WIDTH;
-    public static int HEIGHT = 640; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
+    public static int HEIGHT = 640 + 70; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
     public static final int BOARD_WIDTH = WIDTH/CELLSIZE;
-    public static final int BOARD_HEIGHT = 20;
+    public static final int BOARD_HEIGHT = 18;
     public static final int TOP_MARGIN = 70;
 
     public static final int INITIAL_PARACHUTES = 1;
@@ -36,7 +36,7 @@ public class App extends PApplet{
     private JSONArray levels;
     private int currentLevelIndex = 0;
     private Level currentLevel;
-    private int timeBonus = 0;
+    private float timeBonus = 0;
 
     public String configPath;
     private static Tile[][] grid;
@@ -48,6 +48,17 @@ public class App extends PApplet{
     private boolean levelEnded = false;
     private boolean levelWon = false;
     private PImage tileBaseImage;
+    private boolean playingWinAnimation = false;
+    private boolean noBallsOnBoard = false;
+    private List<AnimationTile> animationTiles = new ArrayList<>();
+    private float animationTimer = 0;
+    private float animationInterval = 0.067f * FPS; // 每0.067秒
+    private int animationStep = 0;
+
+    private int leftX, leftY;  // 左上角当前位置
+    private int rightX, rightY;
+    private int lastLeftX = -1, lastLeftY = -1;
+    private int lastRightX = -1, lastRightY = -1;
 
     public static Random random = new Random();
 
@@ -295,11 +306,7 @@ public class App extends PApplet{
     public void keyPressed(KeyEvent event) {
         // Handle 'r' key press to restart the level
         if (key == 'r' || key == 'R') {
-            if (levelEnded) {
-                levelEnded = false;
-                levelWon = false;
-                //loadLevel("src/main/resources/inkball/level1.txt"); // Reload the current level
-            }
+            loadLevel(currentLevelIndex);
         }
     }
 
@@ -312,6 +319,7 @@ public class App extends PApplet{
     }
 
     public void mousePressed(MouseEvent e) {
+        if (levelEnded) return;
         if (e.getButton() == LEFT) {
             currentLine = new PlayerLine();
             currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
@@ -322,6 +330,7 @@ public class App extends PApplet{
 
     @Override
     public void mouseDragged(MouseEvent e) {
+        if (levelEnded) return;
         if (e.getButton() == LEFT) {
             if (currentLine != null) {
                 currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
@@ -333,6 +342,7 @@ public class App extends PApplet{
 
     @Override
     public void mouseReleased(MouseEvent e) {
+        if (levelEnded) return;
         if (e.getButton() == LEFT && currentLine != null) {
             playerLines.add(currentLine);
             currentLine = null;
@@ -410,7 +420,6 @@ public class App extends PApplet{
         drawUI();
         drawBallQueue();
 
-
         pushMatrix();
         translate(0, TOP_MARGIN);
         drawGrid();
@@ -421,7 +430,7 @@ public class App extends PApplet{
         List<Drawable> nonBallDrawables = new ArrayList<>();
         List<Ball> ballsToRemove = new ArrayList<>();
 
-        // First pass: Separate balls, collidables, and other drawables
+        // Separate balls, collidables, and other drawables
         for (Drawable drawable : drawables) {
             if (drawable instanceof Ball) {
                 Ball ball = (Ball) drawable;
@@ -447,7 +456,6 @@ public class App extends PApplet{
             }
         }
 
-
         // Apply hole attraction
         for (Drawable drawable : nonBallDrawables) {
             if (drawable instanceof Hole) {
@@ -464,7 +472,10 @@ public class App extends PApplet{
         // Remove captured balls
         for (Ball ball : ballsToRemove) {
             drawables.remove(ball);
+            balls.remove(ball);
         }
+
+
 
         // Drawing phase
         // 1. Draw non-ball drawables (including spawners)
@@ -485,44 +496,144 @@ public class App extends PApplet{
         if (currentLine != null) {
             currentLine.draw(this);
         }
-        popMatrix();
+
+
 
         if (!levelEnded) {
             levelTimer--;
+            noBallsOnBoard = balls.isEmpty();
 
             if (!ballQueue.isEmpty()) {
                 if (spawnTimer <= 0) {
-                    spawnNextBall(); // 先生成球
-                    spawnTimer = currentLevel.spawnInterval * FPS; // 然后重置生成计时器
+                    spawnNextBall(); // 生成球
+                    spawnTimer = currentLevel.spawnInterval * FPS;// 重置生成计时器
+                    noBallsOnBoard = false;
                 } else {
                     spawnTimer--;
                 }
             }
 
-            if (levelTimer <= 0) {
+
+            if (ballQueue.isEmpty() && noBallsOnBoard) {
+                levelEnded = true;
+                levelWon = true;
+                timeBonus = levelTimer;
+                playerLines.clear();
+                //System.out.println("Victory condition met. Level won!");
+            }
+
+            if (levelTimer <= 0 && !levelWon) {
                 levelEnded = true;
                 levelWon = false;
-                displayMessage("TIME'S UP");
+                displayMessage("=== TIME'S UP ===");
             }
         } else {
-            // 如果关卡结束，停止球的移动和玩家的操作
-            // 可以在这里实现
+            if (levelWon) {
+                // 胜利处理
+                if (playingWinAnimation != true) {
+                    addTimeBonusToScore();
+                    playingWinAnimation = true;
+                    initializeWinAnimation();
+                }
+
+            } else {
+                // 失败处理
+                for (Drawable drawable : drawables) {
+                    if (drawable instanceof Ball) {
+                        Ball ball = (Ball) drawable;
+                        ball.setVx(0);
+                        ball.setVy(0);
+                    }
+                }
+                // 禁止玩家画线
+                playerLines.clear();
+                currentLine = null;
+                displayMessage("=== TIME'S UP ===");
+            }
         }
 
-//        // 显示计时器
-//        fill(0);
-//        textSize(24);
-//        text(String.format("Timer: %.1f", levelTimer / FPS), 10, HEIGHT - 30);
-//        text("Score: " + score, 10, HEIGHT - 60);
+        if (playingWinAnimation) {
 
-        //drawUI();
+            animationTimer--;
+            if (animationTimer <= 0) {
+                animationTimer = animationInterval;
+                performWinAnimationStep();
+            }
+            if (levelTimer > 0) {
+                levelTimer -= FPS/2;
+                score += 1;
+            }
+
+            if (levelTimer <= 0) {
+                playingWinAnimation = false;
+                levelEnded = false;
+                levelWon = false;
+                currentLevelIndex++;
+                loadLevel(currentLevelIndex);
+            }
+        }
+
+        popMatrix();
+
+    }
+
+    private void initializeWinAnimation() {
+        leftX = 0;
+        leftY = 0;
+        rightX = BOARD_WIDTH - 1;
+        rightY = BOARD_HEIGHT - 1;
+        lastLeftX = -1;
+        lastLeftY = -1;
+        lastRightX = -1;
+        lastRightY = -1;
+        animationTimer = animationInterval;
+    }
+
+    private void performWinAnimationStep() {
+
+        grid[leftX][leftY] = new Tile(leftX, leftY, null, wall4, wall4);
+        grid[rightX][rightY] = new Tile(rightX, rightY, null, wall4, wall4);
+        grid[leftX][leftY].draw(this);
+        grid[rightX][rightY].draw(this);
 
 
-        // Display timer and score
-//        fill(0);
-//        textSize(24);
-//        text("Timer: " + levelTimer / FPS, 10, HEIGHT - 30);
-//        text("Score: " + score, 10, HEIGHT - 60);
+        // 记录当前的位置，供下一次恢复使用
+        lastLeftX = leftX;
+        lastLeftY = leftY;
+        lastRightX = rightX;
+        lastRightY = rightY;
+
+        updatePosition(leftX, leftY, true);
+        updatePosition(rightX, rightY, false);
+    }
+
+    private void updatePosition(int x, int y, boolean isleft) {
+        if (y == 0 && x < BOARD_WIDTH - 1) {
+            x++;
+        } else if (x == BOARD_WIDTH - 1 && y < BOARD_HEIGHT - 1) {
+            y++;
+        } else if (y == BOARD_HEIGHT - 1 && x > 0) {
+            x--;
+        } else if (x == 0 && y > 0) {
+            y--;
+        }
+
+
+        if (isleft) {
+            leftX = x;
+            leftY = y;
+        } else {
+            rightX = x;
+            rightY = y;
+        }
+    }
+
+
+
+    private void addTimeBonusToScore() {
+        int bonusScore = (int) (timeBonus / FPS);
+        score += bonusScore;
+        timeBonus = 0;
     }
 
     private void spawnNextBall() {
@@ -611,14 +722,6 @@ public class App extends PApplet{
             }
         }
 
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            for (int y = 0; y < BOARD_HEIGHT; y++) {
-                Tile tile = grid[x][y];
-                if (tile != null && !tile.isEmpty() && !tile.isCovered()) {
-                    tile.draw(this);
-                }
-            }
-        }
     }
 
     public void increaseScore() {
