@@ -72,6 +72,10 @@ public class Wall implements Drawable, Collidable {
             ball.setVx(velocity.x);
             ball.setVy(velocity.y);
 
+            if (this.type != 0 && ball.getType() != this.type) {
+                ball.updateType(this.type);
+            }
+
             return true;
         }
 

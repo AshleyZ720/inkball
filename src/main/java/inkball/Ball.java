@@ -8,6 +8,7 @@ public class Ball implements Drawable {
     private PImage image;
     private int type;
     private float vx, vy;
+    private float savedVx, savedVy;
     private float radius;
     private static final float ORIGINAL_RADIUS = 12f;
     private static final float MIN_RADIUS = 0.5f;
@@ -46,6 +47,11 @@ public class Ball implements Drawable {
             x += vx;
             y += vy;
         }
+    }
+
+    public void updateType(int newType) {
+        this.type = newType;
+        this.image = App.getBallImageByType(newType);
     }
 
     public void applyAttraction(float fx, float fy) {
@@ -101,6 +107,21 @@ public class Ball implements Drawable {
         this.captured = captured;
     }
 
+    public void saveVelocity() {
+        if (this.vx != 0 || this.vy != 0) {
+            this.savedVx = this.vx;
+            this.savedVy = this.vy;
+            this.vx = 0;
+            this.vy = 0;
+        }
+    }
+
+    public void restoreVelocity() {
+        if (this.vx == 0 && this.vy == 0) {
+            this.vx = this.savedVx;
+            this.vy = this.savedVy;
+        }
+    }
 
     public float getX() {
         return x;

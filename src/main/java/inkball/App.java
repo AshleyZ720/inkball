@@ -42,7 +42,11 @@ public class App extends PApplet{
     private static Tile[][] grid;
     private List<Drawable> drawables;
     private PImage wall0, wall1, wall2, wall3, wall4;
-    private PImage ball0, ball1, ball2, ball3, ball4;
+    private static PImage ball0;
+    private static PImage ball1;
+    private static PImage ball2;
+    private static PImage ball3;
+    private static PImage ball4;
     private PImage spawner, hole;
     private float levelTimer = 0; // Example timer in frames (10 seconds at 30 FPS)
     private boolean levelEnded = false;
@@ -50,7 +54,8 @@ public class App extends PApplet{
     private PImage tileBaseImage;
     private boolean playingWinAnimation = false;
     private boolean noBallsOnBoard = false;
-    private List<AnimationTile> animationTiles = new ArrayList<>();
+    private boolean gameOver = false;
+    private boolean paused = false;
     private float animationTimer = 0;
     private float animationInterval = 0.067f * FPS; // 每0.067秒
     private int animationStep = 0;
@@ -142,8 +147,8 @@ public class App extends PApplet{
 
     public void loadLevel(int levelIndex) {
         if (levelIndex >= levels.size()) {
-            // 游戏结束，所有关卡完成
-            displayMessage("Congratulations! You've completed all levels.");
+            gameOver = true;
+            displayMessage("=== ENDED ===");
             return;
         }
 
@@ -163,7 +168,7 @@ public class App extends PApplet{
         // 其他初始化
         score = 0;
         ballsToRespawn.clear();
-        //spawners.clear();
+
         levelEnded = false;
         levelWon = false;
 
@@ -302,12 +307,35 @@ public class App extends PApplet{
     /**
      * Receive key pressed signal from the keyboard.
      */
+
+
     @Override
     public void keyPressed(KeyEvent event) {
-        // Handle 'r' key press to restart the level
-        if (key == 'r' || key == 'R') {
-            loadLevel(currentLevelIndex);
+        if (key == ' ' && !levelEnded) {
+            paused = !paused;
+            if (!paused) {
+                for (Drawable drawable : drawables) {
+                    if (drawable instanceof Ball) {
+                        Ball ball = (Ball) drawable;
+                        ball.restoreVelocity();
+                    }
+                }
+            }
+        } else if ((key == 'r' || key == 'R') && (!paused || levelEnded)) {
+            playingWinAnimation = false;
+            playerLines.clear();
+            currentLine = null;
+            if (gameOver) {
+
+                currentLevelIndex = 0;
+                gameOver = false;
+                loadLevel(currentLevelIndex);
+            } else {
+
+                loadLevel(currentLevelIndex);
+            }
         }
+
     }
 
     /**
@@ -371,6 +399,13 @@ public class App extends PApplet{
 
         text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), width - 10, 40);
 
+        if (gameOver) {
+            displayMessage("=== ENDED ===");
+
+        } else if (paused) {
+            displayMessage("*** PAUSED ***");
+        }
+
 
     }
 
@@ -423,6 +458,7 @@ public class App extends PApplet{
         pushMatrix();
         translate(0, TOP_MARGIN);
         drawGrid();
+
 
 
         List<Ball> balls = new ArrayList<>();
@@ -499,7 +535,7 @@ public class App extends PApplet{
 
 
 
-        if (!levelEnded) {
+        if (!levelEnded && !paused && !gameOver) {
             levelTimer--;
             noBallsOnBoard = balls.isEmpty();
 
@@ -519,6 +555,7 @@ public class App extends PApplet{
                 levelWon = true;
                 timeBonus = levelTimer;
                 playerLines.clear();
+                spawners.clear();
                 //System.out.println("Victory condition met. Level won!");
             }
 
@@ -529,15 +566,13 @@ public class App extends PApplet{
             }
         } else {
             if (levelWon) {
-                // 胜利处理
                 if (playingWinAnimation != true) {
                     addTimeBonusToScore();
                     playingWinAnimation = true;
                     initializeWinAnimation();
                 }
 
-            } else {
-                // 失败处理
+            } else if (levelEnded) {
                 for (Drawable drawable : drawables) {
                     if (drawable instanceof Ball) {
                         Ball ball = (Ball) drawable;
@@ -545,12 +580,36 @@ public class App extends PApplet{
                         ball.setVy(0);
                     }
                 }
-                // 禁止玩家画线
                 playerLines.clear();
                 currentLine = null;
                 displayMessage("=== TIME'S UP ===");
+            } else if (gameOver) {
+                for (Drawable drawable : drawables) {
+                    if (drawable instanceof Ball) {
+                        Ball ball = (Ball) drawable;
+                        ball.setVx(0);
+                        ball.setVy(0);
+                    }
+                }
+
+                playerLines.clear();
+                currentLine = null;
+                //displayMessage("=== TIME'S UP ===");
+            } else if (paused) {
+                for (Drawable drawable : drawables) {
+                    if (drawable instanceof Ball) {
+                        Ball ball = (Ball) drawable;
+                        ball.saveVelocity();
+                        ball.setVx(0);
+                        ball.setVy(0);
+                    }
+                }
             }
         }
+
+
+
+
 
         if (playingWinAnimation) {
 
@@ -575,6 +634,49 @@ public class App extends PApplet{
 
         popMatrix();
 
+    }
+
+    private List<Ball> getBallsFromDrawables() {
+        List<Ball> balls = new ArrayList<>();
+        for (Drawable drawable : drawables) {
+            if (drawable instanceof Ball) {
+                balls.add((Ball) drawable);
+            }
+        }
+        return balls;
+    }
+
+    private List<Drawable> getNonBallDrawables() {
+        List<Drawable> nonBallDrawables = new ArrayList<>();
+        for (Drawable drawable : drawables) {
+            if (!(drawable instanceof Ball)) {
+                nonBallDrawables.add(drawable);
+            }
+        }
+        return nonBallDrawables;
+    }
+
+    private void drawStaticGameElements() {
+        List<Ball> balls = getBallsFromDrawables();
+        List<Drawable> nonBallDrawables = getNonBallDrawables();
+
+        // 1. 绘制非球的元素（包括生成器）
+        for (Drawable drawable : nonBallDrawables) {
+            drawable.draw(this);
+        }
+
+        // 2. 绘制球
+        for (Ball ball : balls) {
+            ball.draw(this);
+        }
+
+        // 3. 绘制玩家的线
+        for (PlayerLine line : playerLines) {
+            line.draw(this);
+        }
+        if (currentLine != null) {
+            currentLine.draw(this);
+        }
     }
 
     private void initializeWinAnimation() {
@@ -670,6 +772,22 @@ public class App extends PApplet{
         }
     }
 
+    public static PImage getBallImageByType(int type) {
+        switch (type) {
+            case 1:
+                return ball1;
+            case 2:
+                return ball2;
+            case 3:
+                return ball3;
+            case 4:
+                return ball4;
+            case 0:
+            default:
+                return ball0;
+        }
+    }
+
     private String getColorByType(int type) {
         switch (type) {
             case 1:
@@ -693,8 +811,9 @@ public class App extends PApplet{
 
     private void displayMessage(String message) {
         fill(0);
-        textSize(32);
-        text(message, WIDTH / 2 - textWidth(message) / 2, 50);
+        textSize(30);
+
+        text(message, WIDTH - textWidth(message) / 2 - 20, 30);
     }
 
     private void drawBallTypes() {
