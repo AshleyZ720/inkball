@@ -8,7 +8,8 @@ public class Hole implements Drawable {
     private PImage image;
     private int type;
     private static final float ATTRACT_RADIUS = 32;
-    private static final float ATTRACTION_FORCE = 0.005f; // 0.5% of the vector
+    private static final float ATTRACTION_FORCE = 0.005f;// 0.5% of the vector
+    private boolean wasWithinAttractRadius = false;
 
     public Hole(int x, int y, PImage image, int type) {
         this.x = (x + 1) * App.CELLSIZE;
@@ -40,6 +41,7 @@ public class Hole implements Drawable {
         float dist = PApplet.sqrt(dx * dx + dy * dy);
 
         if (dist <= ATTRACT_RADIUS) {
+            wasWithinAttractRadius = true;
             // Apply attraction force
             float fx = ATTRACTION_FORCE * dx;
             float fy = ATTRACTION_FORCE * dy;
@@ -53,8 +55,10 @@ public class Hole implements Drawable {
                 captureBall(ball, app);
             }
         } else {
-            // Reset ball size if it's outside the attraction radius
-            //ball.resetSize();
+            if (wasWithinAttractRadius) {
+                ball.resetSize(); // 逐渐恢复到原始大小
+            }
+            wasWithinAttractRadius = false;
         }
     }
 
@@ -66,9 +70,9 @@ public class Hole implements Drawable {
             app.getDrawables().remove(ball);
 
             if (ball.getType() == type || ball.getType() == 0 || type == 0) {
-                app.increaseScore();
+                app.increaseScore(ball.getType());
             } else {
-                app.decreaseScore();
+                app.decreaseScore(ball.getType());
                 app.respawnBall(ball);
             }
         }

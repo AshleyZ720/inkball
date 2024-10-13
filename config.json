@@ -1,7 +1,7 @@
 {
   "levels": [
     {
-      "layout": "level1.txt",
+      "layout": "extensionLevel.txt",
       "time": 120,
       "spawn_interval": 10,
       "score_increase_from_hole_capture_modifier": 1.0,

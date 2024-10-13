@@ -2,6 +2,7 @@ package inkball;
 
 import processing.core.PApplet;
 import processing.core.PImage;
+import processing.core.PVector;
 import processing.data.JSONArray;
 import processing.data.JSONObject;
 import processing.event.KeyEvent;
@@ -23,7 +24,7 @@ public class App extends PApplet{
     public static final int CELLAVG = 32;
     public static final int TOPBAR = 0;
     public static int WIDTH = 576; //CELLSIZE*BOARD_WIDTH;
-    public static int HEIGHT = 640 + 70; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
+    public static int HEIGHT = 648; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
     public static final int BOARD_WIDTH = WIDTH/CELLSIZE;
     public static final int BOARD_HEIGHT = 18;
     public static final int TOP_MARGIN = 70;
@@ -42,6 +43,7 @@ public class App extends PApplet{
     private static Tile[][] grid;
     private List<Drawable> drawables;
     private PImage wall0, wall1, wall2, wall3, wall4;
+    private PImage speedTile1, speedTile2, speedTile3, speedTile4;
     private static PImage ball0;
     private static PImage ball1;
     private static PImage ball2;
@@ -69,12 +71,21 @@ public class App extends PApplet{
 
     private List<PlayerLine> playerLines;
     private PlayerLine currentLine;
+    private Map<String, Integer> scoreIncreaseMap;
+    private Map<String, Integer> scoreDecreaseMap;
+
+    private boolean isSliding = false;
+    private int slideProgress = 0;
+    private String slidingBallColor = null;
 
     private int score = 0;
+    private int lastLevelScore = 0;
     private List<Ball> ballsToRespawn = new ArrayList<>();
-    private List<Spawner> spawners = new ArrayList<>();
 
-    private List<String> ballQueue; // 未生成的球队列
+    private List<Spawner> spawners = new ArrayList<>();
+    private List<SpeedTile> speedTiles = new ArrayList<>();
+
+    private List<String> ballQueue = new ArrayList<>(); // 未生成的球队列
     private float spawnTimer;
 
     public App() {
@@ -110,6 +121,22 @@ public class App extends PApplet{
             levels = config.getJSONArray("levels");
             playerLines = new ArrayList<>();
 
+            scoreIncreaseMap = new HashMap<>();
+            JSONObject scoreIncreaseJson = config.getJSONObject("score_increase_from_hole_capture");
+            Set<String> increaseKeys = scoreIncreaseJson.keys();
+            for (String color : increaseKeys) {
+                int scoreValue = scoreIncreaseJson.getInt(color);
+                scoreIncreaseMap.put(color.toLowerCase(), scoreValue);
+            }
+
+            scoreDecreaseMap = new HashMap<>();
+            JSONObject scoreDecreaseJson = config.getJSONObject("score_decrease_from_wrong_hole");
+            Set<String> decreaseKeys = scoreDecreaseJson.keys();
+            for (String color : decreaseKeys) {
+                int scoreValue = scoreDecreaseJson.getInt(color);
+                scoreDecreaseMap.put(color.toLowerCase(), scoreValue);
+            }
+
             // 加载第一个关卡
             loadLevel(currentLevelIndex);
         } catch (Exception e) {
@@ -137,6 +164,10 @@ public class App extends PApplet{
             ball2 = loadImageFromResources("ball2");
             ball3 = loadImageFromResources("ball3");
             ball4 = loadImageFromResources("ball4");
+            speedTile1 = loadImageFromResources("speedTile1");
+            speedTile2 = loadImageFromResources("speedTile2");
+            speedTile3= loadImageFromResources("speedTile3");
+            speedTile4 = loadImageFromResources("speedTile4");
             spawner = loadImage("src/main/resources/inkball/entrypoint.png");
             hole = loadImage("src/main/resources/inkball/hole0.png");
         } catch (Exception e) {
@@ -166,7 +197,7 @@ public class App extends PApplet{
         ballQueue = new ArrayList<>(currentLevel.balls);
 
         // 其他初始化
-        score = 0;
+        //score = 0;
         ballsToRespawn.clear();
 
         levelEnded = false;
@@ -234,6 +265,14 @@ public class App extends PApplet{
                     spawners.add(spawner);
                     //System.out.println("Added Spawner at (" + x + ", " + y + ")");
 
+                } else if (tileType == '^' || tileType == 'v' || tileType == '<' || tileType == '>') {
+                    SpeedTile speedTile = new SpeedTile(x, y, overlayImg, tileType);
+                    grid[x][y] = new Tile(x, y, speedTile, tileBaseImage, overlayImg);
+
+                    drawables.add(speedTile);
+                    speedTiles.add(speedTile);
+                    //System.out.println("Added Spawner at (" + x + ", " + y + ")");
+
                 } else {
                     Drawable drawable = getDrawableForTileType(Character.toString(tileType), x, y, overlayImg, '0');
                     grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
@@ -245,69 +284,11 @@ public class App extends PApplet{
 
             }
         }
-        //levelEnded = false;
-        //levelTimer = 300;
-    }
-
-    private Class<? extends Drawable> getTileType(String tileType) {
-        switch (tileType) {
-            case "X": return Wall.class;
-            case "1": case "2": case "3": case "4": return Wall.class;
-            case "S": return Spawner.class;
-            case "H0": case "H1": case "H2": case "H3": case "H4": return Hole.class;
-            case "B0": case "B1": case "B2": case "B3": case "B4": return Ball.class;
-            default: return null;
-        }
-    }
-
-    private Drawable getDrawableForTileType(String tileType, int x, int y, PImage overlayImage, char typeNumber) {
-        switch (tileType) {
-            case "X":
-            case "1":
-            case "2":
-            case "3":
-            case "4":
-                return new Wall(x, y, overlayImage, typeNumber - '0');
-            case "S":
-                return new Spawner(x, y, overlayImage);
-            case "H0":
-            case "H1":
-            case "H2":
-            case "H3":
-            case "H4":
-                return new Hole(x, y, overlayImage, typeNumber - '0');
-            case "B0":
-            case "B1":
-            case "B2":
-            case "B3":
-            case "B4":
-                return new Ball(x, y, overlayImage, typeNumber - '0');
-            default:
-                return null;
-        }
-    }
-
-    // Get the appropriate image based on the tile type
-    private PImage getTileOverlayImage(String tileType) {
-        switch (tileType) {
-            case "X": return wall0;
-            case "1": return wall1;
-            case "2": return wall2;
-            case "3": return wall3;
-            case "4": return wall4;
-            case "S": return spawner;
-            case "H0": return hole; // Extend this for different hole images
-            case "H1": case "H2": case "H3": case "H4": return loadImage("src/main/resources/inkball/hole" + tileType.charAt(1) + ".png");
-            case "B0": return ball0;
-            case "B1": case "B2": case "B3": case "B4": return loadImage("src/main/resources/inkball/ball" + tileType.charAt(1) + ".png");
-            default: return null;
-        }
     }
 
     /**
      * Receive key pressed signal from the keyboard.
      */
-
 
     @Override
     public void keyPressed(KeyEvent event) {
@@ -329,9 +310,10 @@ public class App extends PApplet{
 
                 currentLevelIndex = 0;
                 gameOver = false;
+                score = 0;
                 loadLevel(currentLevelIndex);
             } else {
-
+                score = lastLevelScore;
                 loadLevel(currentLevelIndex);
             }
         }
@@ -349,9 +331,13 @@ public class App extends PApplet{
     public void mousePressed(MouseEvent e) {
         if (levelEnded) return;
         if (e.getButton() == LEFT) {
-            currentLine = new PlayerLine();
-            currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
-        } else if (e.getButton() == RIGHT || (e.getButton() == LEFT && e.isControlDown())) {
+            if (e.isControlDown()) {
+                removeLine(e.getX(), e.getY() - TOP_MARGIN);
+            } else {
+                currentLine = new PlayerLine();
+                currentLine.addPoint(e.getX(), e.getY() - TOP_MARGIN);
+            }
+        } else if (e.getButton() == RIGHT) {
             removeLine(e.getX(), e.getY() - TOP_MARGIN);
         }
     }
@@ -389,15 +375,13 @@ public class App extends PApplet{
     }
 
     private void drawUI() {
-
-
-        textAlign(RIGHT, TOP);
+        textAlign(LEFT, TOP);
         textSize(24);
         fill(0);
 
-        text("Score: " + score, width - 10, 10);
+        text("Score: " + score, 445, 5);
 
-        text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), width - 10, 40);
+        text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), 450, 35);
 
         if (gameOver) {
             displayMessage("=== ENDED ===");
@@ -405,60 +389,104 @@ public class App extends PApplet{
         } else if (paused) {
             displayMessage("*** PAUSED ***");
         }
-
-
     }
 
     private void drawBallQueue() {
-        int maxDisplay = Math.min(5, ballQueue.size());
-        for (int i = 0; i < maxDisplay; i++) {
-            String ballColor = ballQueue.get(i);
-            PImage ballImage = getBallImageByColor(ballColor);
+        // 绘制黑色背景矩形
+        int ballSize = 24;
+        int ballSpacing = 10;
 
-            // 绘制球图像
-            image(ballImage, 10 + i * (App.CELLSIZE + 5), 10, App.CELLSIZE, App.CELLSIZE);
+        int ballsToDisplay = 5;
+        int rectWidth = 180;
+        int rectHeight = 44;
+        int rectX = 10;
+        int rectY = 13;
+
+        // 绘制黑色背景框
+        fill(0);
+        noStroke();
+        rect(rectX, rectY, rectWidth, rectHeight);
+
+        // 保存当前绘图状态
+        pushStyle();
+        pushMatrix();
+
+
+        // 设置剪辑区域
+        clip(rectX, rectY, rectWidth, rectHeight);
+
+        // 将坐标系移动到背景框的左上角
+        translate(rectX, rectY);
+
+        // 更新滑动进度
+        if (isSliding) {
+            if (slideProgress < ballSize + ballSpacing) {
+                slideProgress += 2; // 调整滑动速度
+            } else {
+                slideProgress = ballSize + ballSpacing;
+                isSliding = false;
+                slidingBallColor = null;
+            }
         }
+
+        // 绘制滑动的球
+        if (slidingBallColor != null) {
+            PImage ballImage = getBallImageByColor(slidingBallColor);
+            float xPosition = ballSpacing - slideProgress;
+            float yPosition = ballSpacing;
+            image(ballImage, xPosition, yPosition, ballSize, ballSize);
+        }
+
+        // 绘制剩余的球
+        List<String> ballsToDraw = ballQueue;
+        int maxDisplay = Math.min(ballsToDisplay, ballsToDraw.size());
+        if (isSliding) {
+            for (int i = 0; i < maxDisplay; i++) {
+                String ballColor = ballsToDraw.get(i);
+                PImage ballImage = getBallImageByColor(ballColor);
+                float xPosition = ballSpacing + (i + 1) * (ballSize + ballSpacing) - slideProgress;
+                float yPosition = ballSpacing;
+                image(ballImage, xPosition, yPosition, ballSize, ballSize);
+            }
+        } else {
+            for (int i = 0; i < maxDisplay; i++) {
+                String ballColor = ballsToDraw.get(i);
+                PImage ballImage = getBallImageByColor(ballColor);
+                float xPosition = ballSpacing + i * (ballSize + ballSpacing);
+                float yPosition = ballSpacing;
+                image(ballImage, xPosition, yPosition, ballSize, ballSize);
+            }
+        }
+
+        // 恢复绘图状态
+        popMatrix();
+        popStyle();
+        noClip();
+
         if (!ballQueue.isEmpty()) {
-            fill(0);
-            textSize(16);
-            textAlign(LEFT, TOP);
-            text(String.format("%.1f", spawnTimer / FPS), 10, 10 + App.CELLSIZE + 5);
-        }
-
-        // 绘制生成计时器
-
-    }
-
-    private PImage getBallImageByColor(String color) {
-        switch (color.toLowerCase()) {
-            case "blue":
-                return ball2;
-            case "orange":
-                return ball1;
-            case "green":
-                return ball3;
-            case "yellow":
-                return ball4;
-            case "grey":
-                return ball0;
-            default:
-                return ball0;
+            fill(0); // 使用黑色文本，因为它现在在黑色区域外
+            textSize(24);
+            textAlign(LEFT, CENTER);
+            float textX = rectX + rectWidth + 10; // 将文本放在矩形右侧10像素处
+            float textY = rectY + rectHeight / 2; // 垂直居中对齐文本
+            text(String.format("%.1f", spawnTimer / FPS), textX, textY);
         }
     }
+
+
 
     /**
      * Draw all elements in the game by current frame.
      */
     @Override
     public void draw() {
-        background(255);
+        background(200);
         drawUI();
         drawBallQueue();
 
         pushMatrix();
         translate(0, TOP_MARGIN);
         drawGrid();
-
 
 
         List<Ball> balls = new ArrayList<>();
@@ -483,13 +511,26 @@ public class App extends PApplet{
         // Add player lines to collidables
         collidables.addAll(playerLines);
 
-        // Check collisions
+        // Check collisions and speed boost
         for (Ball ball : balls) {
             for (Collidable collidable : collidables) {
                 if (collidable.checkCollision(ball)) {
                     break; // Ball has collided, move to next ball
                 }
             }
+            for (SpeedTile speedTile : speedTiles) {
+                //System.out.println("ball:" + ball.getX() + ", " + ball.getY());
+                //System.out.println("speedtile" + (speedTile.getX() * App.CELLSIZE + App.CELLSIZE / 2) + ", " + (speedTile.getY() * App.CELLSIZE + App.CELLSIZE / 2));
+                float distanceX = Math.abs(ball.getX() - (speedTile.getX() * App.CELLSIZE + App.CELLSIZE / 2));
+                float distanceY = Math.abs(ball.getY() - (speedTile.getY() * App.CELLSIZE + App.CELLSIZE / 2));
+                float dist = PApplet.sqrt(distanceX * distanceX + distanceY * distanceY);
+
+                if (dist <= 25) {
+                    speedTile.applySpeedBoost(ball);
+
+                }
+            }
+
         }
 
         // Apply hole attraction
@@ -511,8 +552,6 @@ public class App extends PApplet{
             balls.remove(ball);
         }
 
-
-
         // Drawing phase
         // 1. Draw non-ball drawables (including spawners)
         for (Drawable drawable : nonBallDrawables) {
@@ -523,7 +562,6 @@ public class App extends PApplet{
         for (Ball ball : balls) {
             ball.draw(this);
         }
-
 
         // 3. Draw player lines
         for (PlayerLine line : playerLines) {
@@ -566,13 +604,14 @@ public class App extends PApplet{
             }
         } else {
             if (levelWon) {
+                lastLevelScore = score + 1;
                 if (playingWinAnimation != true) {
                     addTimeBonusToScore();
                     playingWinAnimation = true;
                     initializeWinAnimation();
                 }
-
             } else if (levelEnded) {
+                lastLevelScore = score + 1;
                 for (Drawable drawable : drawables) {
                     if (drawable instanceof Ball) {
                         Ball ball = (Ball) drawable;
@@ -591,10 +630,8 @@ public class App extends PApplet{
                         ball.setVy(0);
                     }
                 }
-
                 playerLines.clear();
                 currentLine = null;
-                //displayMessage("=== TIME'S UP ===");
             } else if (paused) {
                 for (Drawable drawable : drawables) {
                     if (drawable instanceof Ball) {
@@ -606,9 +643,6 @@ public class App extends PApplet{
                 }
             }
         }
-
-
-
 
 
         if (playingWinAnimation) {
@@ -624,6 +658,7 @@ public class App extends PApplet{
             }
 
             if (levelTimer <= 0) {
+                levelTimer = 0;
                 playingWinAnimation = false;
                 levelEnded = false;
                 levelWon = false;
@@ -656,28 +691,15 @@ public class App extends PApplet{
         return nonBallDrawables;
     }
 
-    private void drawStaticGameElements() {
-        List<Ball> balls = getBallsFromDrawables();
-        List<Drawable> nonBallDrawables = getNonBallDrawables();
-
-        // 1. 绘制非球的元素（包括生成器）
-        for (Drawable drawable : nonBallDrawables) {
-            drawable.draw(this);
+    private boolean isLineWithinBoard(PlayerLine line) {
+        for (PVector point : line.getPoints()) {
+            if (point.x < 0 || point.x >= BOARD_WIDTH || point.y < 0 || point.y >= BOARD_HEIGHT) {
+                return false;
+            }
         }
-
-        // 2. 绘制球
-        for (Ball ball : balls) {
-            ball.draw(this);
-        }
-
-        // 3. 绘制玩家的线
-        for (PlayerLine line : playerLines) {
-            line.draw(this);
-        }
-        if (currentLine != null) {
-            currentLine.draw(this);
-        }
+        return true;
     }
+
 
     private void initializeWinAnimation() {
         leftX = 0;
@@ -698,12 +720,6 @@ public class App extends PApplet{
         grid[leftX][leftY].draw(this);
         grid[rightX][rightY].draw(this);
 
-
-        // 记录当前的位置，供下一次恢复使用
-        lastLeftX = leftX;
-        lastLeftY = leftY;
-        lastRightX = rightX;
-        lastRightY = rightY;
 
         updatePosition(leftX, leftY, true);
         updatePosition(rightX, rightY, false);
@@ -742,7 +758,11 @@ public class App extends PApplet{
         if (!ballQueue.isEmpty()) {
             String nextBallColor = ballQueue.remove(0);
             PImage ballImage = getBallImageByColor(nextBallColor);
-            int ballType = getBallTypeByColor(nextBallColor);
+            int ballType = getTypeByColor(nextBallColor);
+
+            isSliding = true;
+            slideProgress = 0;
+            slidingBallColor = nextBallColor;
 
             // 从随机的Spawner生成球
             if (!spawners.isEmpty()) {
@@ -756,7 +776,128 @@ public class App extends PApplet{
         }
     }
 
-    private int getBallTypeByColor(String color) {
+
+
+    private void displayMessage(String message) {
+        textAlign(RIGHT, TOP);
+        fill(0);
+        textSize(24);
+
+        text(message, WIDTH - textWidth(message) / 2 - 60, 25);
+    }
+
+    private void drawGrid() {
+        for (int x = 0; x < BOARD_WIDTH; x++) {
+            for (int y = 0; y < BOARD_HEIGHT; y++) {
+                Tile tile = grid[x][y];
+                if (tile != null && tile.isEmpty() && !tile.isCovered()) {
+                    tile.draw(this);
+                }
+            }
+        }
+
+    }
+
+    public void increaseScore(int type) {
+        String color = getColorByType(type);
+        int baseScore = scoreIncreaseMap.getOrDefault(color, 0);
+        float modifier = currentLevel.scoreIncreaseModifier;
+        score += baseScore * modifier;
+    }
+
+    public void decreaseScore(int type) {
+        String color = getColorByType(type);
+        int baseScore = scoreDecreaseMap.getOrDefault(color, 0);
+        float modifier = currentLevel.scoreDecreaseModifier;
+        score -= baseScore * modifier;
+        //if (score < 0) score = 0; // 防止得分为负
+    }
+
+    public void respawnBall(Ball ball) {
+        ballsToRespawn.add(ball);
+        String color = getColorByType(ball.getType());
+        ballQueue.add(color);
+
+        if (ballQueue.size() == 1 && spawnTimer > 0) {
+            spawnTimer = 0; // 立即触发生成
+        }
+    }
+
+    public List<Drawable> getDrawables() {
+        return drawables;
+    }
+
+    // Get the appropriate image based on the tile type
+    private PImage getTileOverlayImage(String tileType) {
+        switch (tileType) {
+            case "X": return wall0;
+            case "1": return wall1;
+            case "2": return wall2;
+            case "3": return wall3;
+            case "4": return wall4;
+            case "^": return speedTile1;
+            case "v": return speedTile2;
+            case "<": return speedTile3;
+            case ">": return speedTile4;
+            case "S": return spawner;
+            case "H0": return hole; // Extend this for different hole images
+            case "H1": case "H2": case "H3": case "H4": return loadImage("src/main/resources/inkball/hole" + tileType.charAt(1) + ".png");
+            case "B0": return ball0;
+            case "B1": case "B2": case "B3": case "B4": return loadImage("src/main/resources/inkball/ball" + tileType.charAt(1) + ".png");
+            default: return null;
+        }
+    }
+
+    private Drawable getDrawableForTileType(String tileType, int x, int y, PImage overlayImage, char typeNumber) {
+        switch (tileType) {
+            case "X":
+            case "1":
+            case "2":
+            case "3":
+            case "4":
+                return new Wall(x, y, overlayImage, typeNumber - '0');
+            case "S":
+                return new Spawner(x, y, overlayImage);
+            case "H0":
+            case "H1":
+            case "H2":
+            case "H3":
+            case "H4":
+                return new Hole(x, y, overlayImage, typeNumber - '0');
+            case "B0":
+            case "B1":
+            case "B2":
+            case "B3":
+            case "B4":
+                return new Ball(x, y, overlayImage, typeNumber - '0');
+//            case "^":
+//            case "v":
+//            case "<":
+//            case ">":
+//                return new SpeedTile(x, y, overlayImage, tileType);
+            default:
+                return null;
+        }
+    }
+
+    private PImage getBallImageByColor(String color) {
+        switch (color.toLowerCase()) {
+            case "blue":
+                return ball2;
+            case "orange":
+                return ball1;
+            case "green":
+                return ball3;
+            case "yellow":
+                return ball4;
+            case "grey":
+                return ball0;
+            default:
+                return ball0;
+        }
+    }
+
+    private int getTypeByColor(String color) {
         switch (color.toLowerCase()) {
             case "blue":
                 return 2;
@@ -769,22 +910,6 @@ public class App extends PApplet{
             case "grey":
             default:
                 return 0;
-        }
-    }
-
-    public static PImage getBallImageByType(int type) {
-        switch (type) {
-            case 1:
-                return ball1;
-            case 2:
-                return ball2;
-            case 3:
-                return ball3;
-            case 4:
-                return ball4;
-            case 0:
-            default:
-                return ball0;
         }
     }
 
@@ -804,80 +929,24 @@ public class App extends PApplet{
         }
     }
 
+    public static PImage getBallImageByType(int type) {
+        switch (type) {
+            case 1:
+                return ball1;
+            case 2:
+                return ball2;
+            case 3:
+                return ball3;
+            case 4:
+                return ball4;
+            case 0:
+            default:
+                return ball0;
+        }
+    }
 
     public static Tile[][] getGrid() {
         return grid;
-    }
-
-    private void displayMessage(String message) {
-        fill(0);
-        textSize(30);
-
-        text(message, WIDTH - textWidth(message) / 2 - 20, 30);
-    }
-
-    private void drawBallTypes() {
-        int ballSize = 30;
-        int spacing = 10;
-        int startX = 10;
-        int startY = 10;
-
-        // 假设您有一个包含所有球类型图像的数组
-        PImage[] ballImages = {ball0, ball1, ball2, ball3, ball4};
-
-        for (int i = 0; i < ballImages.length; i++) {
-            image(ballImages[i], startX + i * (ballSize + spacing), startY, ballSize, ballSize);
-        }
-    }
-
-
-    private void drawGrid() {
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            for (int y = 0; y < BOARD_HEIGHT; y++) {
-                Tile tile = grid[x][y];
-                if (tile != null && tile.isEmpty() && !tile.isCovered()) {
-                    tile.draw(this);
-                }
-            }
-        }
-
-    }
-
-    public void increaseScore() {
-        score += 10; // Adjust the score increment as needed
-    }
-
-    public void decreaseScore() {
-        score -= 5; // Adjust the score decrement as needed
-    }
-
-    public void respawnBall(Ball ball) {
-        ballsToRespawn.add(ball);
-        String color = getColorByType(ball.getType());
-        ballQueue.add(color);
-
-        if (ballQueue.size() == 1 && spawnTimer > 0) {
-            spawnTimer = 0; // 立即触发生成
-        }
-    }
-
-    private void resetBallPosition(Ball ball) {
-        if (!spawners.isEmpty()) {
-            Spawner spawner = spawners.get(random.nextInt(spawners.size()));
-            ball.setX(spawner.getX());
-            ball.setY(spawner.getY());
-            // Reset velocity
-            float baseSpeed = 2.0f;
-            if (FPS == 60) {
-                baseSpeed /= 2;
-            }
-            ball.setVx(random.nextBoolean() ? baseSpeed : -baseSpeed);
-            ball.setVy(random.nextBoolean() ? baseSpeed : -baseSpeed);
-        }
-    }
-
-    public List<Drawable> getDrawables() {
-        return drawables;
     }
 
     public static void main(String[] args) {

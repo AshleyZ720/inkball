@@ -35,9 +35,9 @@ public class PlayerLine implements Drawable, Collidable {
 
     @Override
     public void update() {
-        // PlayerLine doesn't need to update its state every frame
-        // but we need to implement this method as part of the Drawable interface
+
     }
+
 
     @Override
     public boolean checkCollision(Ball ball) {
@@ -90,5 +90,9 @@ public class PlayerLine implements Drawable, Collidable {
 
     public boolean hasCollided() {
         return hasCollided;
+    }
+
+    public List<PVector> getPoints() {
+        return points;
     }
 }
