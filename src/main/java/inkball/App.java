@@ -16,78 +16,89 @@ import java.nio.charset.StandardCharsets;
 import java.io.*;
 import java.util.*;
 
+
+/**
+ * Main application class for the Inkball game.
+ * This class extends PApplet to utilize Processing's graphics capabilities.
+ */
 public class App extends PApplet{
 
-    public static final int CELLSIZE = 32; //8;
+    // Constants for game settings
+    public static final int CELLSIZE = 32;
     public static final int CELLHEIGHT = 32;
-
     public static final int CELLAVG = 32;
     public static final int TOPBAR = 0;
-    public static int WIDTH = 576; //CELLSIZE*BOARD_WIDTH;
-    public static int HEIGHT = 648; //BOARD_HEIGHT*CELLSIZE+TOPBAR;
-    public static final int BOARD_WIDTH = WIDTH/CELLSIZE;
+    public static int WIDTH = 576;
+    public static int HEIGHT = 648;
+    public static final int BOARD_WIDTH = WIDTH / CELLSIZE;
     public static final int BOARD_HEIGHT = 18;
     public static final int TOP_MARGIN = 70;
-
     public static final int INITIAL_PARACHUTES = 1;
-
     public static final float FPS = 30.0f;
 
-    private JSONObject config;
-    private JSONArray levels;
-    private int currentLevelIndex = 0;
+    // Game configuration and state
+    JSONObject config;
+    JSONArray levels;
+    int currentLevelIndex = 0;
     private Level currentLevel;
-    private float timeBonus = 0;
+    float timeBonus = 0;
 
     public String configPath;
     private static Tile[][] grid;
     private List<Drawable> drawables;
+
+    // Image resources
     private PImage wall0, wall1, wall2, wall3, wall4;
     private PImage speedTile1, speedTile2, speedTile3, speedTile4;
-    private static PImage ball0;
-    private static PImage ball1;
-    private static PImage ball2;
-    private static PImage ball3;
-    private static PImage ball4;
+    private static PImage ball0, ball1, ball2, ball3, ball4;
     private PImage spawner, hole;
-    private float levelTimer = 0; // Example timer in frames (10 seconds at 30 FPS)
-    private boolean levelEnded = false;
-    private boolean levelWon = false;
     private PImage tileBaseImage;
-    private boolean playingWinAnimation = false;
-    private boolean noBallsOnBoard = false;
-    private boolean gameOver = false;
-    private boolean paused = false;
+
+    // Game state flags
+    float levelTimer = 0;
+    boolean levelEnded = false;
+    boolean levelWon = false;
+    boolean playingWinAnimation = false;
+    boolean noBallsOnBoard = false;
+    boolean gameOver = false;
+    boolean paused = false;
+
+    // Animation variables
     private float animationTimer = 0;
-    private float animationInterval = 0.067f * FPS; // 每0.067秒
+    private float animationInterval = 0.067f * FPS; // Every 0.067 seconds
     private int animationStep = 0;
 
-    private int leftX, leftY;  // 左上角当前位置
-    private int rightX, rightY;
+    // Animation coordinates
+    int leftX, leftY, rightX, rightY;
     private int lastLeftX = -1, lastLeftY = -1;
     private int lastRightX = -1, lastRightY = -1;
 
     public static Random random = new Random();
 
-    private List<PlayerLine> playerLines;
-    private PlayerLine currentLine;
-    private Map<String, Integer> scoreIncreaseMap;
-    private Map<String, Integer> scoreDecreaseMap;
+    // Game elements
+    List<PlayerLine> playerLines;
+    PlayerLine currentLine;
+    Map<String, Integer> scoreIncreaseMap;
+    Map<String, Integer> scoreDecreaseMap;
 
+    // Ball sliding animation
     private boolean isSliding = false;
     private int slideProgress = 0;
     private String slidingBallColor = null;
 
-    private int score = 0;
+    // Game score and ball management
+    int score = 0;
     private int lastLevelScore = 0;
-    private List<Ball> ballsToRespawn = new ArrayList<>();
-
-    private List<Spawner> spawners = new ArrayList<>();
+    List<Ball> ballsToRespawn = new ArrayList<>();
+    List<Spawner> spawners = new ArrayList<>();
     private List<SpeedTile> speedTiles = new ArrayList<>();
+    List<String> ballQueue = new ArrayList<>(); // Ungenerated Team Columns
+    float spawnTimer;
 
-    private List<String> ballQueue = new ArrayList<>(); // 未生成的球队列
-    private float spawnTimer;
-
+    /**
+     * Constructor for the App class.
+     * Initializes the configuration path.
+     */
     public App() {
         this.configPath = "config.json";
     }
@@ -110,20 +121,22 @@ public class App extends PApplet{
             tileBaseImage = loadImage("src/main/resources/inkball/tile.png");
             loadImages();
 
-            // 加载配置文件
             config = loadJSONObject("config.json");
-            if (config == null) {
-                System.err.println("Failed to load config.json");
-            } else {
-                System.out.println("Config loaded successfully: " + config);
-            }
 
             levels = config.getJSONArray("levels");
             playerLines = new ArrayList<>();
 
             scoreIncreaseMap = new HashMap<>();
             JSONObject scoreIncreaseJson = config.getJSONObject("score_increase_from_hole_capture");
-            Set<String> increaseKeys = scoreIncreaseJson.keys();
+
+
+            Set<String> increaseKeys = new HashSet<>();
+            for (Object key : scoreIncreaseJson.keys()) {
+                if (key instanceof String) {
+                    increaseKeys.add((String) key);
+                }
+            }
+
             for (String color : increaseKeys) {
                 int scoreValue = scoreIncreaseJson.getInt(color);
                 scoreIncreaseMap.put(color.toLowerCase(), scoreValue);
@@ -131,20 +144,50 @@ public class App extends PApplet{
 
             scoreDecreaseMap = new HashMap<>();
             JSONObject scoreDecreaseJson = config.getJSONObject("score_decrease_from_wrong_hole");
-            Set<String> decreaseKeys = scoreDecreaseJson.keys();
+
+            Set<String> decreaseKeys = new HashSet<>();
+            for (Object key : scoreDecreaseJson.keys()) {
+                if (key instanceof String) {
+                    decreaseKeys.add((String) key);
+                }
+            }
+
             for (String color : decreaseKeys) {
                 int scoreValue = scoreDecreaseJson.getInt(color);
                 scoreDecreaseMap.put(color.toLowerCase(), scoreValue);
             }
 
-            // 加载第一个关卡
+
+//            scoreIncreaseMap = new HashMap<>();
+//            JSONObject scoreIncreaseJson = config.getJSONObject("score_increase_from_hole_capture");
+//            Set<String> increaseKeys = scoreIncreaseJson.keys();
+//            for (String color : increaseKeys) {
+//                int scoreValue = scoreIncreaseJson.getInt(color);
+//                scoreIncreaseMap.put(color.toLowerCase(), scoreValue);
+//            }
+//
+//            scoreDecreaseMap = new HashMap<>();
+//            JSONObject scoreDecreaseJson = config.getJSONObject("score_decrease_from_wrong_hole");
+//            Set<String> decreaseKeys = scoreDecreaseJson.keys();
+//            for (String color : decreaseKeys) {
+//                int scoreValue = scoreDecreaseJson.getInt(color);
+//                scoreDecreaseMap.put(color.toLowerCase(), scoreValue);
+//            }
+
+            // Load the first level
             loadLevel(currentLevelIndex);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private PImage loadImageFromResources(String filename) throws UnsupportedEncodingException {
+    /**
+     * Loads an image from resources.
+     * @param filename The name of the image file without extension
+     * @return The loaded PImage
+     * @throws UnsupportedEncodingException If there's an encoding error
+     */
+    PImage loadImageFromResources(String filename) throws UnsupportedEncodingException {
         String imagePath = URLDecoder.decode(
                 this.getClass().getResource("/inkball/" + filename + ".png").getPath(),
                 StandardCharsets.UTF_8.name()
@@ -152,6 +195,9 @@ public class App extends PApplet{
         return loadImage(imagePath);
     }
 
+    /**
+     * Loads all game images.
+     */
     private void loadImages() {
         try {
             wall0 = loadImageFromResources("wall0");
@@ -176,6 +222,10 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Loads a level by index.
+     * @param levelIndex The index of the level to load
+     */
     public void loadLevel(int levelIndex) {
         if (levelIndex >= levels.size()) {
             gameOver = true;
@@ -186,18 +236,17 @@ public class App extends PApplet{
         JSONObject levelData = levels.getJSONObject(levelIndex);
         currentLevel = new Level(levelData);
 
-        // 重置关卡状态
-        levelTimer = currentLevel.time * FPS; // 将秒转换为帧数
-        spawnTimer = currentLevel.spawnInterval * FPS; // 将秒转换为帧数
+        // Reset level state
+        levelTimer = currentLevel.time * FPS; // Convert seconds to frames
+        spawnTimer = currentLevel.spawnInterval * FPS; // Convert seconds to frames
 
-        // 加载关卡布局
+        // Load level layout
         loadLevelLayout(currentLevel.layout);
 
-        // 初始化未生成的球队列
+        // Initialize ungenerated ball queue
         ballQueue = new ArrayList<>(currentLevel.balls);
 
-        // 其他初始化
-        //score = 0;
+        // Other initializations
         ballsToRespawn.clear();
 
         levelEnded = false;
@@ -206,6 +255,10 @@ public class App extends PApplet{
         spawnNextBall();
     }
 
+    /**
+     * Loads the level layout from a file.
+     * @param fileName The name of the layout file
+     */
     public void loadLevelLayout(String fileName) {
         String[] rows = loadStrings(fileName);
         grid = new Tile[BOARD_WIDTH][BOARD_HEIGHT];
@@ -219,13 +272,11 @@ public class App extends PApplet{
                     char typeNumber = row.charAt(x + 1);
                     if (Character.isDigit(typeNumber)) {
                         String compositeType = "" + tileType + typeNumber;
-                        //int type = getTileType(compositeType);
                         PImage overlayImg = getTileOverlayImage(compositeType);
 
                         Drawable drawable;
                         if (tileType == 'H') {
                             drawable = new Hole(x, y, overlayImg, typeNumber - '0');
-                            //Hole hole = new Hole(x, y, overlayImg, typeNum);
 
                             grid[x][y] = new Tile(x, y, drawable, tileBaseImage, overlayImg);
                             grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
@@ -234,17 +285,12 @@ public class App extends PApplet{
                             grid[x + 1][y].setCovered(true);
                             grid[x][y + 1].setCovered(true);
                             grid[x + 1][y + 1].setCovered(true);
-                            //drawables.add(grid[x + 1][y]);
-                            //drawables.add(grid[x][y + 1]);
-                            //drawables.add(grid[x + 1][y + 1]);
                         } else {
                             drawable = new Ball(x, y, overlayImg, typeNumber - '0');
                             grid[x + 1][y] = new Tile(x + 1, y, null, tileBaseImage, null);
                             grid[x][y] = new Tile(x, y, null, tileBaseImage, null);
-                            //grid[x + 1][y] = new Tile(x + 1, y, Tile.EMPTY, tileBaseImage, null);
                         }
                         drawables.add(drawable);
-
                         x += 1;
                         continue;
                     }
@@ -263,7 +309,6 @@ public class App extends PApplet{
 
                     drawables.add(spawner);
                     spawners.add(spawner);
-                    //System.out.println("Added Spawner at (" + x + ", " + y + ")");
 
                 } else if (tileType == '^' || tileType == 'v' || tileType == '<' || tileType == '>') {
                     SpeedTile speedTile = new SpeedTile(x, y, overlayImg, tileType);
@@ -271,7 +316,6 @@ public class App extends PApplet{
 
                     drawables.add(speedTile);
                     speedTiles.add(speedTile);
-                    //System.out.println("Added Spawner at (" + x + ", " + y + ")");
 
                 } else {
                     Drawable drawable = getDrawableForTileType(Character.toString(tileType), x, y, overlayImg, '0');
@@ -287,9 +331,9 @@ public class App extends PApplet{
     }
 
     /**
-     * Receive key pressed signal from the keyboard.
+     * Handles key press events.
+     * @param event The KeyEvent object
      */
-
     @Override
     public void keyPressed(KeyEvent event) {
         if (key == ' ' && !levelEnded) {
@@ -303,11 +347,8 @@ public class App extends PApplet{
                 }
             }
         } else if ((key == 'r' || key == 'R') && (!paused || levelEnded)) {
-            playingWinAnimation = false;
-            playerLines.clear();
-            currentLine = null;
-            if (gameOver) {
 
+            if (gameOver) {
                 currentLevelIndex = 0;
                 gameOver = false;
                 score = 0;
@@ -316,18 +357,23 @@ public class App extends PApplet{
                 score = lastLevelScore;
                 loadLevel(currentLevelIndex);
             }
+            playingWinAnimation = false;
+            playerLines.clear();
+            currentLine = null;
         }
 
     }
 
     /**
-     * Receive key released signal from the keyboard.
+     * Handles key release events.
      */
     @Override
-    public void keyReleased(){
+    public void keyReleased(){}
 
-    }
-
+    /**
+     * Handles mouse press events.
+     * @param e The MouseEvent object
+     */
     public void mousePressed(MouseEvent e) {
         if (levelEnded) return;
         if (e.getButton() == LEFT) {
@@ -342,6 +388,10 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Handles mouse drag events.
+     * @param e The MouseEvent object
+     */
     @Override
     public void mouseDragged(MouseEvent e) {
         if (levelEnded) return;
@@ -354,6 +404,10 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Handles mouse release events.
+     * @param e The MouseEvent object
+     */
     @Override
     public void mouseReleased(MouseEvent e) {
         if (levelEnded) return;
@@ -363,7 +417,12 @@ public class App extends PApplet{
         }
     }
 
-    private void removeLine(float x, float y) {
+    /**
+     * Removes a player line at the specified coordinates.
+     * @param x The x-coordinate
+     * @param y The y-coordinate
+     */
+    void removeLine(float x, float y) {
         Iterator<PlayerLine> iterator = playerLines.iterator();
         while (iterator.hasNext()) {
             PlayerLine line = iterator.next();
@@ -374,6 +433,9 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Draws the user interface elements.
+     */
     private void drawUI() {
         textAlign(LEFT, TOP);
         textSize(24);
@@ -391,8 +453,11 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Draws the ball queue in the UI.
+     */
     private void drawBallQueue() {
-        // 绘制黑色背景矩形
+        // Draw black background rectangle
         int ballSize = 24;
         int ballSpacing = 10;
 
@@ -402,26 +467,25 @@ public class App extends PApplet{
         int rectX = 10;
         int rectY = 13;
 
-        // 绘制黑色背景框
+        // Draw black background frame
         fill(0);
         noStroke();
         rect(rectX, rectY, rectWidth, rectHeight);
 
-        // 保存当前绘图状态
+        // Save current drawing state
         pushStyle();
         pushMatrix();
 
-
-        // 设置剪辑区域
+        // Set clipping area
         clip(rectX, rectY, rectWidth, rectHeight);
 
-        // 将坐标系移动到背景框的左上角
+        // Move coordinate system to top-left corner of background frame
         translate(rectX, rectY);
 
-        // 更新滑动进度
+        // Update sliding progress
         if (isSliding) {
             if (slideProgress < ballSize + ballSpacing) {
-                slideProgress += 2; // 调整滑动速度
+                slideProgress += 2; // Adjust sliding speed
             } else {
                 slideProgress = ballSize + ballSpacing;
                 isSliding = false;
@@ -429,7 +493,7 @@ public class App extends PApplet{
             }
         }
 
-        // 绘制滑动的球
+        // Draw sliding ball
         if (slidingBallColor != null) {
             PImage ballImage = getBallImageByColor(slidingBallColor);
             float xPosition = ballSpacing - slideProgress;
@@ -437,7 +501,7 @@ public class App extends PApplet{
             image(ballImage, xPosition, yPosition, ballSize, ballSize);
         }
 
-        // 绘制剩余的球
+        // Draw remaining balls
         List<String> ballsToDraw = ballQueue;
         int maxDisplay = Math.min(ballsToDisplay, ballsToDraw.size());
         if (isSliding) {
@@ -458,25 +522,24 @@ public class App extends PApplet{
             }
         }
 
-        // 恢复绘图状态
+        // Restore drawing state
         popMatrix();
         popStyle();
         noClip();
 
         if (!ballQueue.isEmpty()) {
-            fill(0); // 使用黑色文本，因为它现在在黑色区域外
+            fill(0); // Use black text, as it's now outside the black area
             textSize(24);
             textAlign(LEFT, CENTER);
-            float textX = rectX + rectWidth + 10; // 将文本放在矩形右侧10像素处
-            float textY = rectY + rectHeight / 2; // 垂直居中对齐文本
+            float textX = rectX + rectWidth + 10; // Place text 10 pixels to the right of the rectangle
+            float textY = rectY + rectHeight / 2; // Vertically center-align the text
             text(String.format("%.1f", spawnTimer / FPS), textX, textY);
         }
     }
 
 
-
     /**
-     * Draw all elements in the game by current frame.
+     * Main draw method, called every frame.
      */
     @Override
     public void draw() {
@@ -572,43 +635,34 @@ public class App extends PApplet{
         }
 
 
-
         if (!levelEnded && !paused && !gameOver) {
             levelTimer--;
             noBallsOnBoard = balls.isEmpty();
 
             if (!ballQueue.isEmpty()) {
                 if (spawnTimer <= 0) {
-                    spawnNextBall(); // 生成球
-                    spawnTimer = currentLevel.spawnInterval * FPS;// 重置生成计时器
+                    spawnNextBall();
+                    spawnTimer = currentLevel.spawnInterval * FPS;
                     noBallsOnBoard = false;
                 } else {
                     spawnTimer--;
                 }
             }
 
-
-            if (ballQueue.isEmpty() && noBallsOnBoard) {
-                levelEnded = true;
-                levelWon = true;
-                timeBonus = levelTimer;
-                playerLines.clear();
-                spawners.clear();
-                //System.out.println("Victory condition met. Level won!");
-            }
+            checkWinCondition();
 
             if (levelTimer <= 0 && !levelWon) {
                 levelEnded = true;
-                levelWon = false;
                 displayMessage("=== TIME'S UP ===");
             }
         } else {
             if (levelWon) {
-                lastLevelScore = score + 1;
-                if (playingWinAnimation != true) {
+                if (!playingWinAnimation) {
+                    lastLevelScore = score + 1;
                     addTimeBonusToScore();
                     playingWinAnimation = true;
                     initializeWinAnimation();
+
                 }
             } else if (levelEnded) {
                 lastLevelScore = score + 1;
@@ -644,7 +698,6 @@ public class App extends PApplet{
             }
         }
 
-
         if (playingWinAnimation) {
 
             animationTimer--;
@@ -671,37 +724,25 @@ public class App extends PApplet{
 
     }
 
-    private List<Ball> getBallsFromDrawables() {
-        List<Ball> balls = new ArrayList<>();
-        for (Drawable drawable : drawables) {
-            if (drawable instanceof Ball) {
-                balls.add((Ball) drawable);
-            }
+    /**
+     * Checks if the win condition for the current level is met.
+     */
+    public void checkWinCondition() {
+        if (ballQueue.isEmpty() && noBallsOnBoard) {
+            levelEnded = true;
+            levelWon = true;
+            timeBonus = levelTimer;
+            playerLines.clear();
+            spawners.clear();
+            //System.out.println("Victory condition met. Level won!");
         }
-        return balls;
-    }
-
-    private List<Drawable> getNonBallDrawables() {
-        List<Drawable> nonBallDrawables = new ArrayList<>();
-        for (Drawable drawable : drawables) {
-            if (!(drawable instanceof Ball)) {
-                nonBallDrawables.add(drawable);
-            }
-        }
-        return nonBallDrawables;
-    }
-
-    private boolean isLineWithinBoard(PlayerLine line) {
-        for (PVector point : line.getPoints()) {
-            if (point.x < 0 || point.x >= BOARD_WIDTH || point.y < 0 || point.y >= BOARD_HEIGHT) {
-                return false;
-            }
-        }
-        return true;
     }
 
 
-    private void initializeWinAnimation() {
+    /**
+     * Initializes the win animation.
+     */
+    void initializeWinAnimation() {
         leftX = 0;
         leftY = 0;
         rightX = BOARD_WIDTH - 1;
@@ -713,7 +754,10 @@ public class App extends PApplet{
         animationTimer = animationInterval;
     }
 
-    private void performWinAnimationStep() {
+    /**
+     * Performs a step in the win animation.
+     */
+    void performWinAnimationStep() {
 
         grid[leftX][leftY] = new Tile(leftX, leftY, null, wall4, wall4);
         grid[rightX][rightY] = new Tile(rightX, rightY, null, wall4, wall4);
@@ -725,7 +769,13 @@ public class App extends PApplet{
         updatePosition(rightX, rightY, false);
     }
 
-    private void updatePosition(int x, int y, boolean isleft) {
+    /**
+     * Updates the position for the win animation.
+     * @param x Current x-coordinate
+     * @param y Current y-coordinate
+     * @param isLeft True if updating left position, false for right
+     */
+    void updatePosition(int x, int y, boolean isLeft) {
         if (y == 0 && x < BOARD_WIDTH - 1) {
             x++;
         } else if (x == BOARD_WIDTH - 1 && y < BOARD_HEIGHT - 1) {
@@ -736,8 +786,7 @@ public class App extends PApplet{
             y--;
         }
 
-
-        if (isleft) {
+        if (isLeft) {
             leftX = x;
             leftY = y;
         } else {
@@ -746,15 +795,19 @@ public class App extends PApplet{
         }
     }
 
-
-
-    private void addTimeBonusToScore() {
+    /**
+     * Adds the time bonus to the score.
+     */
+    void addTimeBonusToScore() {
         int bonusScore = (int) (timeBonus / FPS);
         score += bonusScore;
         timeBonus = 0;
     }
 
-    private void spawnNextBall() {
+    /**
+     * Spawns the next ball in the queue.
+     */
+    void spawnNextBall() {
         if (!ballQueue.isEmpty()) {
             String nextBallColor = ballQueue.remove(0);
             PImage ballImage = getBallImageByColor(nextBallColor);
@@ -764,20 +817,19 @@ public class App extends PApplet{
             slideProgress = 0;
             slidingBallColor = nextBallColor;
 
-            // 从随机的Spawner生成球
+            // Spawn ball from a random Spawner
             if (!spawners.isEmpty()) {
                 Spawner spawner = spawners.get(random.nextInt(spawners.size()));
                 Ball newBall = new Ball(spawner.getX(), spawner.getY(), ballImage, ballType);
                 drawables.add(newBall);
-                //System.out.println("Spawned Ball of type " + ballType + " at (" + newBall.getX() + ", " + newBall.getY() + ")");
-            } else {
-                //System.err.println("No spawners available to spawn ball.");
             }
         }
     }
 
-
-
+    /**
+     * Displays a message on the screen.
+     * @param message The message to display
+     */
     private void displayMessage(String message) {
         textAlign(RIGHT, TOP);
         fill(0);
@@ -786,6 +838,9 @@ public class App extends PApplet{
         text(message, WIDTH - textWidth(message) / 2 - 60, 25);
     }
 
+    /**
+     * Draws the game grid.
+     */
     private void drawGrid() {
         for (int x = 0; x < BOARD_WIDTH; x++) {
             for (int y = 0; y < BOARD_HEIGHT; y++) {
@@ -798,6 +853,10 @@ public class App extends PApplet{
 
     }
 
+    /**
+     * Increases the score based on the ball type.
+     * @param type The type of the ball
+     */
     public void increaseScore(int type) {
         String color = getColorByType(type);
         int baseScore = scoreIncreaseMap.getOrDefault(color, 0);
@@ -805,30 +864,45 @@ public class App extends PApplet{
         score += baseScore * modifier;
     }
 
+    /**
+     * Decreases the score based on the ball type.
+     * @param type The type of the ball
+     */
     public void decreaseScore(int type) {
         String color = getColorByType(type);
         int baseScore = scoreDecreaseMap.getOrDefault(color, 0);
         float modifier = currentLevel.scoreDecreaseModifier;
         score -= baseScore * modifier;
-        //if (score < 0) score = 0; // 防止得分为负
     }
 
+    /**
+     * Respawns a ball.
+     * @param ball The ball to respawn
+     */
     public void respawnBall(Ball ball) {
         ballsToRespawn.add(ball);
         String color = getColorByType(ball.getType());
         ballQueue.add(color);
 
         if (ballQueue.size() == 1 && spawnTimer > 0) {
-            spawnTimer = 0; // 立即触发生成
+            spawnTimer = 0; // Trigger immediate spawn
         }
     }
 
+    /**
+     * Gets the list of drawable objects.
+     * @return List of Drawable objects
+     */
     public List<Drawable> getDrawables() {
         return drawables;
     }
 
-    // Get the appropriate image based on the tile type
-    private PImage getTileOverlayImage(String tileType) {
+    /**
+     * Gets the appropriate image for a tile type.
+     * @param tileType The type of the tile
+     * @return The corresponding PImage
+     */
+    PImage getTileOverlayImage(String tileType) {
         switch (tileType) {
             case "X": return wall0;
             case "1": return wall1;
@@ -848,7 +922,16 @@ public class App extends PApplet{
         }
     }
 
-    private Drawable getDrawableForTileType(String tileType, int x, int y, PImage overlayImage, char typeNumber) {
+    /**
+     * Creates a Drawable object based on the tile type.
+     * @param tileType The type of the tile
+     * @param x The x-coordinate of the tile
+     * @param y The y-coordinate of the tile
+     * @param overlayImage The image to overlay on the tile
+     * @param typeNumber The number associated with the tile type
+     * @return The corresponding Drawable object
+     */
+    Drawable getDrawableForTileType(String tileType, int x, int y, PImage overlayImage, char typeNumber) {
         switch (tileType) {
             case "X":
             case "1":
@@ -870,17 +953,17 @@ public class App extends PApplet{
             case "B3":
             case "B4":
                 return new Ball(x, y, overlayImage, typeNumber - '0');
-//            case "^":
-//            case "v":
-//            case "<":
-//            case ">":
-//                return new SpeedTile(x, y, overlayImage, tileType);
             default:
                 return null;
         }
     }
 
-    private PImage getBallImageByColor(String color) {
+    /**
+     * Gets the ball image based on the specified color.
+     * @param color The color of the ball
+     * @return The corresponding ball image
+     */
+    public PImage getBallImageByColor(String color) {
         switch (color.toLowerCase()) {
             case "blue":
                 return ball2;
@@ -891,13 +974,17 @@ public class App extends PApplet{
             case "yellow":
                 return ball4;
             case "grey":
-                return ball0;
             default:
                 return ball0;
         }
     }
 
-    private int getTypeByColor(String color) {
+    /**
+     * Gets the type number based on the specified color.
+     * @param color The color of the ball
+     * @return The corresponding type number
+     */
+    public int getTypeByColor(String color) {
         switch (color.toLowerCase()) {
             case "blue":
                 return 2;
@@ -913,7 +1000,12 @@ public class App extends PApplet{
         }
     }
 
-    private String getColorByType(int type) {
+    /**
+     * Gets the color name based on the specified type number.
+     * @param type The type number of the ball
+     * @return The corresponding color name
+     */
+    public String getColorByType(int type) {
         switch (type) {
             case 1:
                 return "orange";
@@ -929,6 +1021,11 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Gets the ball image based on the specified type number.
+     * @param type The type number of the ball
+     * @return The corresponding ball image
+     */
     public static PImage getBallImageByType(int type) {
         switch (type) {
             case 1:
@@ -945,12 +1042,19 @@ public class App extends PApplet{
         }
     }
 
+    /**
+     * Gets the current game grid.
+     * @return The 2D array representing the game grid
+     */
     public static Tile[][] getGrid() {
         return grid;
     }
 
+    /**
+     * The main method to start the application.
+     * @param args Command line arguments (not used)
+     */
     public static void main(String[] args) {
         PApplet.main("inkball.App");
     }
-
 }
