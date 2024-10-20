@@ -32,15 +32,6 @@ public class Hole implements Drawable {
     }
 
     /**
-     * Gets the type of the hole.
-     *
-     * @return The type of the hole.
-     */
-    public int getType() {
-        return type;
-    }
-
-    /**
      * Draws the hole on the game screen.
      *
      * @param app The PApplet instance used for drawing the hole.
@@ -154,5 +145,14 @@ public class Hole implements Drawable {
      */
     public void setY(float y) {
         this.y = y;
+    }
+
+    /**
+     * Gets the type of the hole.
+     *
+     * @return The type of the hole.
+     */
+    public int getType() {
+        return type;
     }
 }

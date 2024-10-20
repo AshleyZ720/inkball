@@ -21,6 +21,7 @@ public class BallTest {
         app.setup();
         mockImage = app.createImage(32, 32, PApplet.RGB);
         ball = new Ball(1, 1, mockImage, 1);
+        App.random.setSeed(12345);
     }
 
     @Test

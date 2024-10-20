@@ -34,6 +34,7 @@ public class PlayerLineTest {
         // Running the PApplet sketch in the testing environment
         PApplet.runSketch(new String[] {"TestPApplet"}, mockApp);
         mockApp.delay(100);  // Allow some time for setup
+        App.random.setSeed(12345);
     }
 
     @Test

@@ -21,6 +21,7 @@ public class SpawnerTest {
 
         mockImage = mockApp.createImage(10, 10, PApplet.ARGB);
         spawner = new Spawner(3, 4, mockImage);
+        App.random.setSeed(12345);
     }
 
     @Test

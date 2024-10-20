@@ -49,6 +49,7 @@ public class TileTest {
         drawable = new DummyDrawable(); // Using a dummy drawable implementation
 
         tile = new Tile(2, 3, drawable, baseImage, overlayImage);
+        App.random.setSeed(12345);
     }
 
     /**

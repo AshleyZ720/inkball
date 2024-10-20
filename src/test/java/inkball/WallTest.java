@@ -21,6 +21,7 @@ public class WallTest {
         mockImage = app.createImage(32, 32, PApplet.RGB);
         wall = new Wall(1, 1, mockImage, 1);
         ball = new Ball(2, 2, mockImage, 0);
+        App.random.setSeed(12345);
     }
 
     @Test

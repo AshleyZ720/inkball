@@ -53,6 +53,7 @@ public class SpeedTileTest {
         speedTile = new SpeedTile(3, 4, mockImage, '^');
 
         testBall = new TestBall(50, 50, mockImage, 0);
+        App.random.setSeed(12345);
     }
 
     @Test

@@ -41,6 +41,8 @@ public class AppTest {
         app.setup();
         app.loadLevel(0);
         app.delay(1000); // Give some time for setup
+
+        App.random.setSeed(12345);
     }
 
     @Test

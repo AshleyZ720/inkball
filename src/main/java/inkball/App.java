@@ -157,23 +157,6 @@ public class App extends PApplet{
                 scoreDecreaseMap.put(color.toLowerCase(), scoreValue);
             }
 
-
-//            scoreIncreaseMap = new HashMap<>();
-//            JSONObject scoreIncreaseJson = config.getJSONObject("score_increase_from_hole_capture");
-//            Set<String> increaseKeys = scoreIncreaseJson.keys();
-//            for (String color : increaseKeys) {
-//                int scoreValue = scoreIncreaseJson.getInt(color);
-//                scoreIncreaseMap.put(color.toLowerCase(), scoreValue);
-//            }
-//
-//            scoreDecreaseMap = new HashMap<>();
-//            JSONObject scoreDecreaseJson = config.getJSONObject("score_decrease_from_wrong_hole");
-//            Set<String> decreaseKeys = scoreDecreaseJson.keys();
-//            for (String color : decreaseKeys) {
-//                int scoreValue = scoreDecreaseJson.getInt(color);
-//                scoreDecreaseMap.put(color.toLowerCase(), scoreValue);
-//            }
-
             // Load the first level
             loadLevel(currentLevelIndex);
         } catch (Exception e) {
@@ -441,9 +424,9 @@ public class App extends PApplet{
         textSize(24);
         fill(0);
 
-        text("Score: " + score, 445, 5);
+        text("Score: " + score, 438, 5);
 
-        text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), 450, 35);
+        text("Time: " +  (int)Math.floor(levelTimer / (double)FPS), 445, 35);
 
         if (gameOver) {
             displayMessage("=== ENDED ===");
@@ -653,19 +636,15 @@ public class App extends PApplet{
 
             if (levelTimer <= 0 && !levelWon) {
                 levelEnded = true;
-                displayMessage("=== TIME'S UP ===");
             }
         } else {
             if (levelWon) {
                 if (!playingWinAnimation) {
-                    lastLevelScore = score + 1;
                     addTimeBonusToScore();
                     playingWinAnimation = true;
                     initializeWinAnimation();
-
                 }
             } else if (levelEnded) {
-                lastLevelScore = score + 1;
                 for (Drawable drawable : drawables) {
                     if (drawable instanceof Ball) {
                         Ball ball = (Ball) drawable;
@@ -675,7 +654,12 @@ public class App extends PApplet{
                 }
                 playerLines.clear();
                 currentLine = null;
-                displayMessage("=== TIME'S UP ===");
+                textAlign(RIGHT, TOP);
+                fill(0);
+                textSize(20);
+
+                text("=== TIME'S UP ===", 430, -50);
+
             } else if (gameOver) {
                 for (Drawable drawable : drawables) {
                     if (drawable instanceof Ball) {
@@ -715,6 +699,7 @@ public class App extends PApplet{
                 playingWinAnimation = false;
                 levelEnded = false;
                 levelWon = false;
+                lastLevelScore = score;
                 currentLevelIndex++;
                 loadLevel(currentLevelIndex);
             }
@@ -734,6 +719,7 @@ public class App extends PApplet{
             timeBonus = levelTimer;
             playerLines.clear();
             spawners.clear();
+            speedTiles.clear();
             //System.out.println("Victory condition met. Level won!");
         }
     }

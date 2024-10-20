@@ -19,8 +19,6 @@ public class Ball implements Drawable {
     private static final float MIN_RADIUS = 0.5f; // Minimum allowed radius for the ball
     private static final float SIZE_ADJUSTMENT_SPEED = 2.0f; // Speed of size adjustment when affected by holes
     private boolean captured = false; // Whether the ball has been captured by a hole
-    private boolean isGrowing = false; // Indicates if the ball is currently growing in size
-    private static final float GROWTH_SPEED = 0.1f; // Speed at which the ball grows when applicable
 
     private static final int MAX_VX = 4; // Maximum velocity in the x direction
     private static final int MAX_VY = 4; // Maximum velocity in the y direction
